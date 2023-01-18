@@ -21,12 +21,16 @@ return function()
 
     --- Remove a value from the end of the QIT.
     ---@param self QIT
+    ---@param i integer? Position to remove from, if you want to.
     ---@return any value The value removed.
-    Remove = function(self)
+    Remove = function(self, i)
       if self.n > 0 then
-        local value = self[self.n]
-        self[self.n] = nil
-        self.n = self.n - 1
+        local value = self[i or self.n]
+
+        if value ~= nil then
+          self[i or self.n] = nil
+          self.n = self.n - 1
+        end
 
         return value
       end

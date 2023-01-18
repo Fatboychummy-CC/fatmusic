@@ -1,6 +1,7 @@
 --- Deep copy a table.
----@param t table The table to be copied
----@return table copied The copied table
+---@generic T
+---@param t T The value to be copied
+---@return T copied The copied value
 local function deep_copy(t)
   local tnew = {}
 
