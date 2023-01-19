@@ -33,7 +33,6 @@ local transmitter = transmission.create(config.channel, config.response_channel,
 
 --- Run the server.
 local function server()
-  local manager, add, remove = utilities.editable_coroutine()
   local playlist = QIT() ---@type QIT<song_info>
   local currently_playing ---@type song_info?
 
@@ -76,7 +75,7 @@ local function server()
 
   local seen_messages = {}
 
-  parallel.waitForAny(manager,
+  parallel.waitForAny(
     function()
       while true do
         local action = transmitter:receive()
