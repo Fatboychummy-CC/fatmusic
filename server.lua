@@ -10,9 +10,11 @@
 
 local transmission = require "transmission"
 local file_helper  = require "file_helper"
-local utilities    = require "utilities"
+local aukit        = require "aukit"
 local deep_copy    = require "deep_copy"
 local QIT          = require "QIT"
+
+local mon = peripheral.find "monitor"
 
 local config = file_helper.unserialize(".fatmusic_config", {
   channel = 1470,
@@ -76,6 +78,7 @@ local function server()
   local seen_messages = {}
 
   parallel.waitForAny(
+  --- Listener coroutine - listen for commands from clients.
     function()
       while true do
         local action = transmitter:receive()
@@ -124,21 +127,52 @@ local function server()
         end
       end
     end,
+
+    --- Music update coroutine - Send information to clients when song changes.
     function()
       while true do
         os.pullEvent("fatmusic:song_update")
         transmitter:send(get_broadcast_info())
       end
     end,
+
+    --- Music playing coroutine - Plays the music.
     function()
+      local was_playing = false
       while true do
         currently_playing = get_next_song()
 
         if currently_playing then
+          os.queueEvent("fatmusic:song_update")
+          was_playing = true
+
           parallel.waitForAny(
+          --- Actually plays the music, displays info to the monitor as well.
             function()
-              shell.run() ---@TODO Run austream on monitor.
+              if currently_playing.remote:match("%.wav$") then
+                local handle = http.get(currently_playing.remote)
+                local data = handle.readAll()
+                handle.close()
+
+                local iter, length = aukit.stream.wav(data, true)
+                local formatter = "%02d:%02d / %02d:%02d"
+                local w, h = mon.getSize()
+
+                mon.setCursorPos(math.floor(w / 2 - #currently_playing.name / 2 + 0.5), math.ceil(h / 2) - 1)
+                mon.write(currently_playing.name)
+
+                aukit.play(iter, function(pos)
+                  pos = math.min(pos, 5999)
+                  mon.setCursorPos(math.floor(w / 2 - #formatter / 2 + 0.5), math.ceil(h / 2))
+                  mon.write(formatter:format(math.floor(pos / 60), pos % 60, math.floor(length / 60), length % 60))
+                end, 1, peripheral.find "speaker")
+              else
+                transmitter:send(transmission.make_action("song-error", nil,
+                  ("Song %s is not of .wav type."):format(currently_playing.name)), true)
+              end
             end,
+
+            --- Listens for stop or skip events, stops the song that is currently playing when it receives one.
             function()
               while true do
                 local event = os.pullEvent()
@@ -148,6 +182,9 @@ local function server()
               end
             end
           )
+        elseif was_playing then
+          was_playing = false
+          os.queueEvent("fatmusic:song_update")
         end
 
         sleep(1)
