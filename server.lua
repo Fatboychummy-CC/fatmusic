@@ -15,12 +15,15 @@ local logging      = require "logging"
 local deep_copy    = require "deep_copy"
 local QIT          = require "QIT"
 
+local DIR = fs.getDir(shell.getRunningProgram())
+local CONFIG_FILE = fs.combine(DIR, "server-config.lson")
+
 local main_context = logging.createContext("MAIN", colors.black, colors.blue)
 local mon = peripheral.find "monitor"
 local log_win = window.create(term.current(), 1, 1, term.getSize())
 logging.setWin(log_win)
 
-local config = file_helper.unserialize(".fatmusic_config", {
+local config = file_helper.unserialize(CONFIG_FILE, {
   channel = 1470,
   response_channel = 1471
 })
@@ -30,15 +33,18 @@ if ... == "debug" then
   logging.setFile("fatmusic_debug.txt")
 end
 
+main_context.debug("Starting server in '/%D'", DIR)
+main_context.debug("Config : %s", CONFIG_FILE)
+
 main_context.debug("Finding modem.")
 local modem
 modem = peripheral.find("modem", function(_, wrapped) return wrapped.isWireless() end)
 if not modem then
   modem = peripheral.find("modem")
-
-  if not modem then
-    error("No modem is connected to the computer!", 0)
-  end
+end
+if not modem then
+  main_context.error("No modem is connected to the computer!", 0)
+  return
 end
 
 local transmitter = transmission.create(config.channel, config.response_channel, modem)
