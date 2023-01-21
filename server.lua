@@ -26,7 +26,7 @@ if ... == "debug" then
 end
 
 main_context.debug("Starting server in '/%s'", DIR)
-main_context.debug("Config : %s", CONFIG_FILE)
+main_context.debug("Config : /%s", CONFIG_FILE)
 
 main_context.debug("Finding modem.")
 local modem
