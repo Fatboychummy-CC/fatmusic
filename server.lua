@@ -1,13 +1,5 @@
 --- Server program that actually plays audio.
 
---#region Type definitions
-
----@class song_info
----@field name string The name of the song.
----@field remote string The remote resource location of the song.
-
---#endregion
-
 local transmission = require "transmission"
 local file_helper  = require "file_helper"
 local aukit        = require "aukit"
