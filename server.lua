@@ -22,7 +22,7 @@ local config = file_helper.unserialize(CONFIG_FILE, {
 
 if ... == "debug" then
   logging.setLevel(logging.logLevel.DEBUG)
-  logging.setFile("fatmusic_debug.txt")
+  logging.setFile("fatmusic_debug-server.txt")
 end
 
 main_context.debug("Starting server in '/%D'", DIR)
