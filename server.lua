@@ -25,7 +25,7 @@ if ... == "debug" then
   logging.setFile("fatmusic_debug-server.txt")
 end
 
-main_context.debug("Starting server in '/%D'", DIR)
+main_context.debug("Starting server in '/%s'", DIR)
 main_context.debug("Config : %s", CONFIG_FILE)
 
 main_context.debug("Finding modem.")
