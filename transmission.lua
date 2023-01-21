@@ -82,7 +82,7 @@ end
 ---@return boolean is_action If the object is an action.
 function transmission.verify(action)
   return type(action) == "table" and type(action.action) == "string" and type(action.transmission_id) == "number" and
-      type(action.system_id) == "number" and (type(transmission.error) == "string" or transmission.error == nil)
+      type(action.system_id) == "number" and (type(action.error) == "string" or action.error == nil)
 end
 
 --- Transmit an action.
@@ -94,7 +94,7 @@ end
 function transmission.send(self, action, no_ack)
   expect(1, action, "table")
   if not transmission.verify(action) then
-    error("Bad argument #1: Expected action object.", 0)
+    error("Bad argument #1: Expected action object.", 2)
   end
   local attempts = 0
 
