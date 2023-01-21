@@ -175,28 +175,37 @@ local function server()
             function()
               if currently_playing.remote:match("%.wav$") then
                 play_context.debug("Downloading remote...")
-                local handle, err = http.get(currently_playing.remote)
+
+                mon.clear()
+                mon.setCursorPos(3, 2)
+                mon.write("Downloading...")
+                mon.setCursorPos(3, 4)
+                mon.write("--:-- / --:--")
+
+                local handle, err = http.get(currently_playing.remote, nil, true)
                 if not handle then
                   play_context.error("Failed to download file: %s", err)
                   return
                 end
                 local data = handle.readAll()
                 handle.close()
-                play_context("Song downloaded.")
+                play_context.info("Song downloaded.")
 
+                local speakers = { peripheral.find "speaker" }
                 local iter, length = aukit.stream.wav(data, true)
                 local formatter = "%02d:%02d / %02d:%02d"
                 local w, h = mon.getSize()
 
-                mon.setCursorPos(math.floor(w / 2 - #currently_playing.name / 2 + 0.5), math.ceil(h / 2) - 1)
+                mon.clear()
+                mon.setCursorPos(3, 2)
                 mon.write(currently_playing.name)
 
                 play_context.debug("Begin playing song.")
                 aukit.play(iter, function(pos)
                   pos = math.min(pos, 5999)
-                  mon.setCursorPos(math.floor(w / 2 - #formatter / 2 + 0.5), math.ceil(h / 2))
+                  mon.setCursorPos(3, 4)
                   mon.write(formatter:format(math.floor(pos / 60), pos % 60, math.floor(length / 60), length % 60))
-                end, 1, peripheral.find "speaker")
+                end, 1, table.unpack(speakers))
 
                 play_context.debug("Song finished.")
               else
@@ -217,6 +226,8 @@ local function server()
               end
             end
           )
+
+          mon.clear()
         elseif was_playing then
           was_playing = false
           os.queueEvent("fatmusic:song_update")
@@ -233,5 +244,5 @@ main_context.debug("Start.")
 local ok, err = pcall(server)
 
 if not ok then
-  printError(err)
+  main_context.error(err)
 end

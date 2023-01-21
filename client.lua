@@ -11,11 +11,12 @@ local CONFIG_FILE = fs.combine(DIR, "client-config.lson") --- Config storage fil
 
 local main_context = logging.createContext("MAIN", colors.black, colors.blue)
 local http_context = logging.createContext("HTTP", colors.black, colors.brown)
-local log_win = window.create(term.current(), 1, 1, term.getSize())
-logging.setWin(log_win)
-local main_win = window.create(term.current(), 1, 1, term.getSize())
-local old_win = term.redirect(main_win)
+local net_context  = logging.createContext("NET", colors.black, colors.brown)
 
+local log_win  = window.create(term.current(), 1, 1, term.getSize())
+local main_win = window.create(term.current(), 1, 1, term.getSize())
+local old_win  = term.redirect(main_win)
+logging.setWin(log_win)
 log_win.setVisible(false)
 
 if ... == "debug" then
@@ -51,7 +52,8 @@ if not modem then
   error("No modem connected!", 0)
 end
 
-local transmitter = transmission.create(config.channel, config.response_channel, modem)
+local transmitter = transmission.create(config.channel, config.response_channel, modem,
+  logging.createContext("TRAN", colors.black, colors.green))
 
 ---@type Array<string>
 local TIPS = {
@@ -65,6 +67,27 @@ local function get_tip()
   tip_n = (tip_n + 1) % #TIPS
 
   return "Tip: " .. TIPS[tip_n + 1]
+end
+
+--- Notify the user that something that takes time is occurring.
+---@param message string The message to display.
+---@param is_error boolean? If the message is an error being displayed, display it in red.
+local function notify(message, is_error)
+  local old = term.redirect(main_win)
+  local old_color = main_win.getTextColor()
+
+  main_win.clear()
+  main_win.setCursorPos(1, 1)
+  main_win.setTextColor(is_error and colors.red or colors.white)
+
+  print(message)
+  print()
+
+  main_win.setTextColor(colors.yellow)
+  print(get_tip())
+
+  main_win.setTextColor(old_color)
+  term.redirect(old)
 end
 
 --- Get information about the remotes.
@@ -109,17 +132,7 @@ end
 
 --- Add songs menu: Get remotes, display all available songs.
 local function add_songs()
-  main_win.clear()
-  local old = term.redirect(main_win)
-  print("Downloading remotes... Please wait.")
-  print()
-  local old_color = main_win.getTextColor()
-  main_win.setTextColor(colors.yellow)
-  print(get_tip())
-  main_win.setTextColor(old_color)
-
-  term.redirect(old)
-
+  notify("Downloading remotes... Please wait.")
 
   local remote_info = get_remotes()
 
@@ -146,8 +159,32 @@ local function add_songs()
       -- Send the clear notification to the server.
     elseif selection ~= RETURN then
       -- Send the information to the server.
-      transmitter:send(transmission.make_action("add-to-playlist",
-        { name = selection:match(":::(.-)$"), remote = selection:match("^(.-):::") }))
+      local name = selection:match(":::(.-)$")
+      local remote = selection:match("^(.-):::")
+
+      notify(("Attempting to play song '%s'"):format(name))
+      net_context.info("Add to playlist '%s'", name)
+
+      local acked, err = transmitter:send(
+        transmission.make_action(
+          "add-to-playlist",
+          {
+            name = name,
+            remote = remote
+          }
+        )
+      )
+
+      if not acked then
+        notify("Server did not respond.", true)
+        net_context.error("Server did not respond.")
+      elseif err then
+        notify(("Server responded with error: %s"):format(err), true)
+        net_context.error("Server responded with error: %s", err)
+      end
+      if not acked or err then
+        sleep(3)
+      end
     end
   until selection == RETURN
 end
@@ -166,7 +203,7 @@ local function main_menu()
   menu.addSelection(ADD_SONGS, "Add songs to queue", "", "Add songs to the player's queue.", overrides)
   menu.addSelection(VIEW_QUEUE, "View the queue", "", "View the player's queue.", overrides)
   menu.addSelection(CONFIG, "Config", "", "Change configation settings.", overrides)
-  menu.addSelection(EXIT, "Exit", "", "Exit this program, returning to the CraftOS shell.", overrides)
+  menu.addSelection(EXIT, "Exit", "", "Exit this program.", overrides)
 
   repeat
     local selection = menu.run()

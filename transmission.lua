@@ -20,22 +20,27 @@ local system_id = os.getComputerID()
 ---@field private _RESPONSE_CHANNEL integer The channel this transmission listens on.
 ---@field private _MODEM modem The modem to transmit on.
 ---@field private _MODEM_NAME string The peripheral name of the modem.
+---@field private _LOGGER logger? The logger, if one supplied
 local transmission = {}
 
 --- Create a new transmission object.
 ---@param channel integer The channel to broadcast on.
 ---@param response_channel integer The channel tro listen for responses on.
 ---@param modem modem The modem to use.
+---@param logger logger? The logger to be used with this transmitter.
 ---@return transmission object The transmission object.
 ---@nodiscard
-function transmission.create(channel, response_channel, modem)
+function transmission.create(channel, response_channel, modem, logger)
+  modem.open(response_channel)
+
   ---@type transmission
   return setmetatable(
     {
       _CHANNEL = channel,
       _RESPONSE_CHANNEL = response_channel,
       _MODEM = modem,
-      _MODEM_NAME = peripheral.getName(modem)
+      _MODEM_NAME = peripheral.getName(modem),
+      _LOGGER = logger
     },
     { __index = transmission }
   )
@@ -98,7 +103,17 @@ function transmission.send(self, action, no_ack)
   end
   local attempts = 0
 
+  local log = function() end
+
+  if self._LOGGER then
+    log = function(...)
+      ---@diagnostic disable-next-line THIS IS LITERALLY IN THE SAME CLASS YOU BITCH
+      return self._LOGGER.debug(...)
+    end
+  end
+
   repeat
+    log("Transmit attempt: %d", attempts)
     self._MODEM.transmit(self._CHANNEL, self._RESPONSE_CHANNEL, action)
     if no_ack then
       return false
@@ -111,15 +126,20 @@ function transmission.send(self, action, no_ack)
       time_elapsed = time_elapsed + (os.clock() - start)
 
       if response then
+        log("Got response")
         if type(response.data) == "table" and
             response.data.system_id == system_id and
             response.data.transmission_id == action.transmission_id then
+          log("Is meant for us.")
           if response.action == "ack" then
+            log("Is ack")
             return true
           elseif response.action == "error" then
+            log("Is error")
             return true, response.error
           end
 
+          log("Not what we were expecting")
           return true, "ACKed with incorrect packet type."
         end
       else
@@ -128,6 +148,7 @@ function transmission.send(self, action, no_ack)
     until time_elapsed >= TIMEOUT or not response
   until attempts >= 5
 
+  log("Timed out.")
   return false, "Timed out."
 end
 
