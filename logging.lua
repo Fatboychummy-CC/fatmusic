@@ -79,7 +79,11 @@ local function l_write(context, level, s, ...)
       write("]: ")
       term.setTextColor(logging.logLevelColours[level])
       if args.n > 0 then
-        write(s:format(...))
+        local ok, formatted = pcall(s.format, s, ...)
+        if not ok then
+          error(formatted:match(":%d-: (.+)"), 3)
+        end
+        write(formatted)
       else
         write(s)
       end
@@ -93,8 +97,12 @@ local function l_write(context, level, s, ...)
     end
     if file then
       if ... then
+        local ok, formatted = pcall(s.format, s, ...)
+        if not ok then
+          error(formatted:match(":%d-: (.+)"), 3)
+        end
         file.writeLine(
-          ("[%s][%s]: %s"):format(context.name, logging.logLevelNames[level], s:format(...))
+          ("[%s][%s]: %s"):format(context.name, logging.logLevelNames[level], formatted)
         )
       else
         file.writeLine(
