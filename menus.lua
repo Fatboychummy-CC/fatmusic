@@ -204,7 +204,7 @@ local event_handlers = {
 ---@param event_name string The name of the event.
 ---@param ... any The event parameters.
 local function handle_menu_event(menu, event_name, ...)
-  if event_handlers[event_name] then
+  if menu.win.isVisible() and event_handlers[event_name] then
     local result = event_handlers[event_name](menu, ...)
 
     if not result then
