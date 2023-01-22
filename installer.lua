@@ -101,7 +101,7 @@ for filename, remote in pairs(files_needed) do
   local data = handle.readAll()
   handle.close()
 
-  io.open(output_file):write(data):close()
+  io.open(output_file, 'w'):write(data):close()
 end
 
 progress(1, "Done.")
