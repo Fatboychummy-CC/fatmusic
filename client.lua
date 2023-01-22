@@ -13,11 +13,13 @@ local main_context = logging.createContext("MAIN", colors.black, colors.blue)
 local http_context = logging.createContext("HTTP", colors.black, colors.brown)
 local net_context  = logging.createContext("NET", colors.black, colors.brown)
 
-local log_win  = window.create(term.current(), 1, 1, term.getSize())
-local main_win = window.create(term.current(), 1, 1, term.getSize())
-local old_win  = term.redirect(main_win)
+local log_win      = window.create(term.current(), 1, 1, term.getSize())
+local main_win     = window.create(term.current(), 1, 1, term.getSize())
+local playlist_win = window.create(term.current(), 1, 1, term.getSize())
+local old_win      = term.redirect(main_win)
 logging.setWin(log_win)
 log_win.setVisible(false)
+playlist_win.setVisible(false)
 
 if ... == "debug" then
   logging.setLevel(logging.logLevel.DEBUG)
@@ -59,8 +61,9 @@ local transmitter = transmission.create(config.channel, config.response_channel,
 local TIPS = {
   "Press 'c' to open or close the console.",
   ("You can add your own remote locations by adding to the file %s!"):format(REMOTES_FILE),
+  "Press 'p' to view the current playlist.",
   "The server runs a queue, you don't need to wait for a song to end to add another.",
-
+  "Press 'm' to reopen the menus."
 }
 local tip_n = 0
 local function get_tip()
@@ -159,6 +162,16 @@ local function add_songs()
   local menu = menus.create(main_win, "Add Songs")
 
   local overrides = { override_width = -1 }
+
+  local SEP = "seperator"
+  local SKIP = "skip"
+  local CLEAR = "clear"
+  local RETURN = "return"
+
+  local function make_seperator()
+    menu.addSelection(SEP, ("\x8C"):rep(20), "", "", overrides)
+  end
+
   for _, remote in ipairs(remote_info) do
     for _, info in ipairs(remote.files) do
       menu.addSelection(info.remote .. ":::" .. info.name, info.name, "", ("Add '%s' to queue."):format(info.name),
@@ -166,10 +179,7 @@ local function add_songs()
     end
   end
 
-  local SKIP = "skip"
-  local CLEAR = "clear"
-  local RETURN = "return"
-
+  make_seperator()
   menu.addSelection(SKIP, "Skip current song", "", "Skip the currently playing song.", overrides)
   menu.addSelection(CLEAR, "Clear song queue", "", "Clear the song queue on the server.", overrides)
   menu.addSelection(RETURN, "Return", "", "Return to the previous menu.", overrides)
@@ -187,7 +197,7 @@ local function add_songs()
       net_context.info("Clear playlist")
 
       send_action(transmission.make_action("stop"))
-    elseif selection ~= RETURN then
+    elseif selection ~= RETURN and selection ~= SEP then
       -- Send the information to the server.
       local name = selection:match(":::(.-)$")
       local remote = selection:match("^(.-):::")
@@ -211,14 +221,12 @@ local function main_menu()
   local menu = menus.create(main_win, "Main menu")
 
   local ADD_SONGS = "addsongs"
-  local VIEW_QUEUE = "viewqueue"
   local CONFIG = "config"
   local EXIT = "exit"
 
   local overrides = { override_width = -1 }
 
-  menu.addSelection(ADD_SONGS, "Add songs to queue", "", "Add songs to the player's queue.", overrides)
-  menu.addSelection(VIEW_QUEUE, "View the queue", "", "View the player's queue.", overrides)
+  menu.addSelection(ADD_SONGS, "Songs", "", "Add/remove songs to/from the queue.", overrides)
   menu.addSelection(CONFIG, "Config", "", "Change configation settings.", overrides)
   menu.addSelection(EXIT, "Exit", "", "Exit this program.", overrides)
 
@@ -227,8 +235,6 @@ local function main_menu()
 
     if selection == ADD_SONGS then
       add_songs()
-    elseif selection == VIEW_QUEUE then
-
     elseif selection == CONFIG then
 
     end
@@ -236,31 +242,140 @@ local function main_menu()
   main_context.info("Exiting program.")
 end
 
-local function console()
-  --- Controls whether the console is currently visible or the menus are visible.
-  local console_visible = false
+--- Generate a random 8-length string
+---@return string randomized_string The random string generated.
+local function gen_random_string8()
+  local str = ""
+  for i = 1, 8 do
+    str = str .. string.char(math.random(0, 255))
+  end
+  return str
+end
 
+local playlist_context = logging.createContext("PLAYLIST", colors.black, colors.purple)
+--- Get the current playlist
+---@return Arrayn<song_info>? playlist The playlist.
+local function get_playlist()
+  playlist_context.debug("No playlist supplied - must request.")
+  local acked, err, data = transmitter:send(
+    transmission.make_action(
+      "get-playlist"
+    )
+  )
+
+  if not acked then
+    playlist_context.error("get-playlist not ACKed")
+    return
+  end
+  if err then
+    playlist_context.error("get-playlist error: %s", err)
+    return
+  end
+  if not data then
+    playlist_context.error("get-playlist ACKed but no data supplied.")
+    return { n = 0 }
+  end
+
+  return data or { n = 0 }
+end
+
+--- Get the currently playing song.
+---@return song_info? info Song information.
+local function get_playing()
+  local acked, err, data = transmitter:send(
+    transmission.make_action(
+      "get-playing"
+    )
+  )
+
+  if not acked then
+    playlist_context.error("get-playing not ACKed")
+    return
+  end
+  if err then
+    playlist_context.error("get-playing error: %s", err)
+    return
+  end
+
+  return data
+end
+
+local function playlist()
+  local menu = menus.create(playlist_win, "Current playlist")
+
+  --- Get the playlist, add it to the menu.
+  ---@param current song_info? The currently playing song.
+  ---@param list Arrayn<song_info>? The playlist.
+  local function update_list(current, list)
+    if not list then
+      list = get_playlist()
+      current = get_playing()
+    end
+    if not list then return end
+
+    playlist_context.debug("Got %d items in playlist.", list.n)
+
+    local overrides = { override_width = -1 }
+
+    menu.clearSelections()
+    menu.addSelection("refresh", "Refresh", "", "Refresh this listing.", overrides)
+
+    if current then
+      menu.addSelection(gen_random_string8(), current.name, "", current.name, overrides)
+    end
+
+    for _, song_info in ipairs(list) do
+      menu.addSelection(gen_random_string8(), song_info.name, "", song_info.name, overrides)
+    end
+  end
+
+  parallel.waitForAny(
+    function()
+      while true do
+        local sel = menu.run()
+
+        if sel == "refresh" then update_list() menu.redraw() end
+      end
+    end,
+    function()
+      update_list()
+      menu.redraw()
+
+      while true do
+        local action = transmitter:receive("song-update")
+
+        playlist_context.debug(textutils.serialize(action.data.playlist))
+
+        update_list(action.data.playing, action.data.playlist)
+        menu.redraw()
+      end
+    end
+  )
+end
+
+local function window_controller()
   while true do
     local _, key = os.pullEvent "key"
-    if key == keys.c then
-      if console_visible then
-        -- set the main window visible second.
-        log_win.setVisible(false)
-        main_win.setVisible(true)
-      else
-        -- Set the log window visible second.
-        main_win.setVisible(false)
-        log_win.setVisible(true)
-      end
 
-      console_visible = not console_visible
+    if key == keys.c then
+      playlist_win.setVisible(false)
+      main_win.setVisible(false)
+      log_win.setVisible(true)
+    elseif key == keys.p then
+      main_win.setVisible(false)
+      log_win.setVisible(false)
+      playlist_win.setVisible(true)
+    elseif key == keys.m then
+      log_win.setVisible(false)
+      playlist_win.setVisible(false)
+      main_win.setVisible(true)
     end
   end
 end
 
 --- Main function which runs all of the code.
 local function main()
-  parallel.waitForAny(main_menu, console)
+  parallel.waitForAny(main_menu, window_controller, playlist)
 end
 
 local ok, err = pcall(main)
