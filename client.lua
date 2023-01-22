@@ -93,6 +93,74 @@ local function notify(message, is_error)
   term.redirect(old)
 end
 
+local function controls_menu()
+  local old = term.redirect(main_win)
+
+  main_win.clear()
+  main_win.setCursorPos(1, 1)
+
+  print("Controls:\n")
+
+  print("c: Switch to console")
+  print("m: Switch to menu")
+  print("p: Switch to playlist view\n")
+
+  print("In the menu and playlist view, use up/down arrow keys to move the cursor")
+  print("In the menu view, press enter to select an option.\n\n")
+
+  print("Press any key to continue...")
+  term.redirect(old)
+
+  sleep()
+  os.pullEvent "key"
+end
+
+local configs = {
+  channel = "number",
+  response_channel = "number"
+}
+
+local function config_menu()
+  local menu = menus.create(main_win, "Configuration")
+
+  local CHANNEL = "channel"
+  local RESPONSE_CHANNEL = "response_channel"
+  local RETURN = "return"
+
+  local function config_get(value)
+    return function()
+      return tostring(config[value])
+    end
+  end
+
+  local overrides = {
+    override_width = 13
+  }
+
+  menu.addSelection(CHANNEL, "Channel", config_get("channel"), "The channel to send messages on.", overrides)
+  menu.addSelection(RESPONSE_CHANNEL, "R-Channel", config_get("response_channel"),
+    "The channel to listen for responses on.", overrides)
+  menu.addSelection(RETURN, "Return", "", "Return to the previous menu.", overrides)
+
+  repeat
+    local selection = menu.run()
+
+    if selection ~= RETURN then
+      if configs[selection] == "number" then
+        local response
+        repeat
+          response = tonumber(menus.question(main_win, "Change config",
+            ("Enter a number to use for: %s. Enter -1 to cancel."):format(selection)))
+        until response
+        if response ~= -1 then
+          config[selection] = response
+          file_helper.serialize(CONFIG_FILE, config)
+        end
+      end
+    end
+  until selection == RETURN
+end
+
 --- Get information about the remotes.
 ---@return Arrayn<{remote:string, files:Arrayn<song_info>}>
 local function get_remotes()
@@ -222,12 +290,14 @@ local function main_menu()
 
   local ADD_SONGS = "addsongs"
   local CONFIG = "config"
+  local CONTROLS = "controls"
   local EXIT = "exit"
 
   local overrides = { override_width = -1 }
 
   menu.addSelection(ADD_SONGS, "Songs", "", "Add/remove songs to/from the queue.", overrides)
   menu.addSelection(CONFIG, "Config", "", "Change configation settings.", overrides)
+  menu.addSelection(CONTROLS, "Controls", "", "View the controls.", overrides)
   menu.addSelection(EXIT, "Exit", "", "Exit this program.", overrides)
 
   repeat
@@ -236,7 +306,9 @@ local function main_menu()
     if selection == ADD_SONGS then
       add_songs()
     elseif selection == CONFIG then
-
+      config_menu()
+    elseif selection == CONTROLS then
+      controls_menu()
     end
   until selection == EXIT
   main_context.info("Exiting program.")
