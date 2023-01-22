@@ -20,7 +20,7 @@ wget run https://raw.githubusercontent.com/Fatboychummy-CC/fatmusic/main/install
 wget run https://raw.githubusercontent.com/Fatboychummy-CC/fatmusic/main/installer.lua server
 ```
 
-## Adding more repositories
+## Repositories
 
 A "repository" is simply a file on the internet somewhere which states the names
 and locations of audio files, in the following format:
@@ -36,6 +36,15 @@ more audio functionality soon.
 
 Double note that if I add more functionality, I will most likely need to change
 the "repository" specification.
+
+### Adding/removing repositories
+
+It is planned to add this to a menu in the program, but currently the way to add
+repositories is to edit the `remotes.lson` file that is generated after the
+first run of the client. It is simply a list of strings pointing to a file on
+the internet which match the repository spec.
+
+Simply add a link to the repository file, and the client will use that.
 
 ## To-do
 
