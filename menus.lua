@@ -26,6 +26,7 @@ local deep_copy = require "deep_copy"
 ---@field public editSelection fun(id:string, name:string?, description:string|fun(id:string)?, long_description:string?, options:selection_options?) Edit a selection in the menu. Supplied fields will be updated, `nil` fields ignored.
 ---@field public getSelection fun(id:string):selection? Get information about a selection.
 ---@field public clearSelections fun() Clear all selections out of the menu, so selections can be re-added.
+---@field public redraw fun() Redraw the menu.
 ---@field public run fun(id:string?):string Run the menu and return the id of the selection selected. Start with the id passed selected (or the first selection, if nil)
 ---@field public title string The title of this menu
 ---@field public win table The window that this menu draws to.
@@ -230,6 +231,10 @@ function menus.create(win, title)
     _scroll_position = 0
   }
 
+  function menu.redraw()
+    redraw_menu(menu)
+  end
+
   function menu.addSelection(id, name, description, long_description, options)
     table.insert(menu.selections,
       { id = id, name = name, description = description, long_description = long_description, options = options or {} })
@@ -243,7 +248,7 @@ function menus.create(win, title)
         selection.long_description = long_description or selection.long_description
         selection.options = options or selection.options
 
-        os.queueEvent("menu_redraw")
+        menu.redraw()
         return
       end
     end
@@ -259,7 +264,7 @@ function menus.create(win, title)
 
   function menu.clearSelections()
     menu.selections = {}
-    os.queueEvent("menu_redraw")
+    menu.redraw()
   end
 
   function menu.run()
