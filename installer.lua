@@ -3,7 +3,7 @@
 local args = table.pack(...)
 
 local RUNNING = shell.getRunningProgram()
-local DIR = fs.getDir(RUNNING)
+local DIR = shell.dir()
 local NAME = fs.getName(RUNNING)
 if NAME:match("wget%.lua") then
   NAME = "installer.lua"
