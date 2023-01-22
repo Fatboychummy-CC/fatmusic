@@ -71,10 +71,12 @@ end
 
 --- Shorthand to ACK a packet.
 ---@param action action The action to ACK.
+---@param extra_data any The extra data to send with the ack.
 ---@return action ACK The ack packet.
-function transmission.ack(action)
+function transmission.ack(action, extra_data)
   return transmission.make_action("ack",
-    { transmission_id = action.transmission_id, system_id = action.system_id, session_id = action.session_id })
+    { transmission_id = action.transmission_id, system_id = action.system_id, session_id = action.session_id,
+      extra = extra_data })
 end
 
 --- Shorthand to ERROR a packet.
@@ -99,6 +101,7 @@ end
 ---@param no_ack boolean? If true, ignores waiting for an ACK.
 ---@return boolean acked Whether or not the action was acknowledged.
 ---@return string? error The error returned with the acknowledgement, if one. This can appear even if `acked` was true!
+---@return any extra_data The extra data supplied in the ack.
 function transmission.send(self, action, no_ack)
   expect(1, action, "table")
   if not transmission.verify(action) then
@@ -137,14 +140,14 @@ function transmission.send(self, action, no_ack)
           log("Is meant for us.")
           if response.action == "ack" then
             log("Is ack")
-            return true
+            return true, nil, response.extra
           elseif response.action == "error" then
             log("Is error")
-            return true, response.error
+            return true, response.error, response.extra
           end
 
           log("Not what we were expecting")
-          return true, "ACKed with incorrect packet type."
+          return true, "ACKed with incorrect packet type.", response.extra
         end
       else
         attempts = attempts + 1
