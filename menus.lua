@@ -179,14 +179,14 @@ local event_handlers = {
 
       -- handle wrap-around
       if menu._selected == #menu.selections - 1 then
-        menu._scroll_position = #menu.selections - 8 ---@TODO this is a hardcoded size!
+        menu._scroll_position = #menu.selections - (h - 5)
         if menu._scroll_position < 0 then menu._scroll_position = 0 end
       end
     elseif key == keys.down then
       menu._selected = (menu._selected + 1) % #menu.selections
 
       -- scroll down if needed
-      while menu._selected > menu._scroll_position + (h - 6) do ---@TODO this is a hardcoded size!
+      while menu._selected > menu._scroll_position + (h - 6) do
         menu._scroll_position = menu._scroll_position + 1
       end
 
