@@ -94,15 +94,19 @@ local function server()
       while true do
         local action = transmitter:receive()
 
-        if seen_messages[action.system_id] and seen_messages[action.system_id][action.transmission_id] then
+        if seen_messages[action.system_id] and seen_messages[action.system_id][action.session_id] and
+            seen_messages[action.system_id][action.session_id][action.transmission_id] then
           -- If we receive a duplicate message, send the same response back.
-          transmitter:send(seen_messages[action.system_id][action.transmission_id], true)
-          listener_context.debug("Got duplicate message, resending response.")
+          transmitter:send(seen_messages[action.system_id][action.session_id][action.transmission_id], true)
+          listener_context.warn("Got duplicate message, resending response.")
         else
           local response
 
           if not seen_messages[action.system_id] then
             seen_messages[action.system_id] = {}
+          end
+          if not seen_messages[action.system_id][action.session_id] then
+            seen_messages[action.system_id][action.session_id] = {}
           end
 
           if action.action == "get-playlist" then
@@ -121,7 +125,7 @@ local function server()
                 listener_context.error("Received song information table missing field 'remote'.")
                 response = transmission.error(action, "Song information table is missing field 'remote'.")
               else
-                listener_context.debug("Add to playlist: %s (%s)", action.data.name, action.data.remote)
+                listener_context.info("Add to playlist: %s (%s)", action.data.name, action.data.remote)
                 play_audio(action.data.name, action.data.remote)
                 response = transmission.ack(action)
                 os.queueEvent("fatmusic:song_update") -- broadcast the new playlist.
