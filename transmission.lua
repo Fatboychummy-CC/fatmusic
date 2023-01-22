@@ -6,6 +6,7 @@ local TIMEOUT = 1
 
 local last_id = 0
 local system_id = os.getComputerID()
+local session_id = math.random(0, 100000)
 
 ---@class action An action object representing something that the transmitter wants.
 ---@field public action string The action to be taken.
@@ -63,7 +64,8 @@ function transmission.make_action(action, data, error)
     data = data,
     error = error,
     transmission_id = last_id,
-    system_id = system_id
+    system_id = system_id,
+    session_id = session_id
   }
 end
 
@@ -71,7 +73,8 @@ end
 ---@param action action The action to ACK.
 ---@return action ACK The ack packet.
 function transmission.ack(action)
-  return transmission.make_action("ack", { transmission_id = action.transmission_id, system_id = action.system_id })
+  return transmission.make_action("ack",
+    { transmission_id = action.transmission_id, system_id = action.system_id, session_id = action.session_id })
 end
 
 --- Shorthand to ERROR a packet.
@@ -129,7 +132,8 @@ function transmission.send(self, action, no_ack)
         log("Got response")
         if type(response.data) == "table" and
             response.data.system_id == system_id and
-            response.data.transmission_id == action.transmission_id then
+            response.data.transmission_id == action.transmission_id and
+            response.data.session_id == action.session_id then
           log("Is meant for us.")
           if response.action == "ack" then
             log("Is ack")
