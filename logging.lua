@@ -3,7 +3,7 @@ local logging = {}
 
 local file
 local win
-local log_level = 0
+local log_level = 1
 
 ---@alias log_context {background_colour:colour, text_colour:colour, name:string}
 
