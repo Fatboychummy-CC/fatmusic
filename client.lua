@@ -130,6 +130,26 @@ local function get_remotes()
   return info:Clean()
 end
 
+local function send_action(action)
+  local acked, err = transmitter:send(
+    action
+  )
+
+  if not acked then
+    notify("Server did not respond.", true)
+    net_context.error("Server did not respond.")
+  elseif err then
+    notify(("Server responded with error: %s"):format(err), true)
+    net_context.error("Server responded with error: %s", err)
+  end
+  if not acked or err then
+    sleep(3)
+  else
+    notify("Success")
+    sleep(0.5)
+  end
+end
+
 --- Add songs menu: Get remotes, display all available songs.
 local function add_songs()
   notify("Downloading remotes... Please wait.")
@@ -146,17 +166,27 @@ local function add_songs()
     end
   end
 
+  local SKIP = "skip"
   local CLEAR = "clear"
   local RETURN = "return"
 
+  menu.addSelection(SKIP, "Skip current song", "", "Skip the currently playing song.", overrides)
   menu.addSelection(CLEAR, "Clear song queue", "", "Clear the song queue on the server.", overrides)
   menu.addSelection(RETURN, "Return", "", "Return to the previous menu.", overrides)
 
   repeat
     local selection = menu.run()
 
-    if selection == CLEAR then
+    if selection == SKIP then
+      notify("Attempting to skip current song.")
+      net_context.info("Skip song.")
+      send_action(transmission.make_action("skip"))
+    elseif selection == CLEAR then
       -- Send the clear notification to the server.
+      notify("Attempting to clear song queue.")
+      net_context.info("Clear playlist")
+
+      send_action(transmission.make_action("stop"))
     elseif selection ~= RETURN then
       -- Send the information to the server.
       local name = selection:match(":::(.-)$")
@@ -165,26 +195,13 @@ local function add_songs()
       notify(("Attempting to play song '%s'"):format(name))
       net_context.info("Add to playlist '%s'", name)
 
-      local acked, err = transmitter:send(
-        transmission.make_action(
-          "add-to-playlist",
-          {
-            name = name,
-            remote = remote
-          }
-        )
-      )
-
-      if not acked then
-        notify("Server did not respond.", true)
-        net_context.error("Server did not respond.")
-      elseif err then
-        notify(("Server responded with error: %s"):format(err), true)
-        net_context.error("Server responded with error: %s", err)
-      end
-      if not acked or err then
-        sleep(3)
-      end
+      send_action(transmission.make_action(
+        "add-to-playlist",
+        {
+          name = name,
+          remote = remote
+        }
+      ))
     end
   until selection == RETURN
 end
