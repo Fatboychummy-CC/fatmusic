@@ -54,15 +54,15 @@ local function server()
   end
 
   --- Get the current playlist as an action to send to the client.
-  ---@return action playlist The playlist information.
+  ---@return Arrayn<song_info> playlist The playlist information
   local function get_playlist()
-    return transmission.make_action("playlist", deep_copy(playlist):Clean())
+    return deep_copy(playlist):Clean()
   end
 
   --- Get the currently playing song.
-  ---@return action currently_playing The song currently playing.
+  ---@return song_info? currently_playing The currently playing song information.
   local function get_currently_playing()
-    return transmission.make_action("now-playing", deep_copy(currently_playing))
+    return deep_copy(currently_playing)
   end
 
   --- When the song updates, get information about everything and transmit it.
@@ -111,10 +111,10 @@ local function server()
 
           if action.action == "get-playlist" then
             listener_context.debug("Get playlist")
-            response = get_playlist()
+            response = transmission.ack(action, get_playlist())
           elseif action.action == "get-playing" then
             listener_context.debug("Get currently playing")
-            response = get_currently_playing()
+            response = transmission.ack(action, get_currently_playing())
           elseif action.action == "add-to-playlist" then
             listener_context.debug("Add to playlist")
             if type(action.data) == "table" then
