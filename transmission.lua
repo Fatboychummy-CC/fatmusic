@@ -119,7 +119,7 @@ function transmission.send(self, action, no_ack)
   end
 
   repeat
-    log("Transmit attempt: %d", attempts)
+    log("Transmit attempt: %d (%s)", attempts, action.action)
     self._MODEM.transmit(self._CHANNEL, self._RESPONSE_CHANNEL, action)
     if no_ack then
       return false
@@ -140,14 +140,14 @@ function transmission.send(self, action, no_ack)
           log("Is meant for us.")
           if response.action == "ack" then
             log("Is ack")
-            return true, nil, response.extra
+            return true, nil, response.data.extra
           elseif response.action == "error" then
             log("Is error")
-            return true, response.error, response.extra
+            return true, response.error, response.data.extra
           end
 
           log("Not what we were expecting")
-          return true, "ACKed with incorrect packet type.", response.extra
+          return true, "ACKed with incorrect packet type.", response.data.extra
         end
       else
         attempts = attempts + 1
