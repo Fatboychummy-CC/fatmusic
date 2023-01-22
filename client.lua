@@ -3,7 +3,6 @@ local menus        = require "menus"
 local logging      = require "logging"
 local file_helper  = require "file_helper"
 local QIT          = require "QIT"
-local deep_copy    = require "deep_copy"
 
 local DIR = fs.getDir(shell.getRunningProgram()) --- Working directory of the program.
 local REMOTES_FILE = fs.combine(DIR, "remotes.lson") --- Remotes storage file.
