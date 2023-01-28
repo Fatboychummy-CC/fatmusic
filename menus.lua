@@ -24,6 +24,7 @@ local deep_copy = require "deep_copy"
 ---@class menu
 ---@field public addSelection fun(id:string, name:string, description:string|fun(id:string), long_description:string, options:selection_options?) Add a new selection to the menu.
 ---@field public editSelection fun(id:string, name:string?, description:string|fun(id:string)?, long_description:string?, options:selection_options?) Edit a selection in the menu. Supplied fields will be updated, `nil` fields ignored.
+---@field public removeSelection fun(id:string) Remove a selection from the menu.
 ---@field public getSelection fun(id:string):selection? Get information about a selection.
 ---@field public clearSelections fun() Clear all selections out of the menu, so selections can be re-added.
 ---@field public redraw fun() Redraw the menu.
@@ -286,6 +287,9 @@ function menus.create(win, title)
     redraw_menu(menu)
     while true do
       if handle_menu_event(menu, coroutine.yield()) then
+        if not menu.selections[menu._selected + 1] then
+          error(("Bad selection on return: %d of a max %d"):format(menu._selected + 1, #menu.selections), 0)
+        end
         return menu.selections[menu._selected + 1].id
       end
     end
