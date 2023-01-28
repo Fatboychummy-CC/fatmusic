@@ -254,6 +254,21 @@ function menus.create(win, title)
     end
   end
 
+  function menu.removeSelection(id)
+    for i, selection in ipairs(menu.selections) do
+      if selection.id == id then
+        table.remove(menu.selections, i)
+
+        -- protect from overflowing on removal.
+        menu._scroll_position = 0
+        menu._selected = 0
+
+        os.queueEvent("menu_redraw")
+        return
+      end
+    end
+  end
+
   function menu.getSelection(id)
     for _, selection in ipairs(menu.selections) do
       if selection.id == id then
