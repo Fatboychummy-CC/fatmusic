@@ -11,40 +11,6 @@ local FILES = {
 
 local config = file_helper.unserialize(FILES.CONFIG, {})
 
-local function setup_complete()
-  print("Done. Writing config.")
-  file_helper.serialize(FILES.CONFIG, config)
-  print("Done. You can relaunch this program now.")
-  error("", 0)
-end
-
-local function setup_client()
-  -- setup configurations
-  config.type = "client"
-  config.default_server = "None"
-  config.server_key = ""
-  config.keepalive_timeout = 12
-
-  setup_complete()
-end
-
-local function setup_server()
-  -- warn user of startup overwrite.
-
-  -- setup configurations
-  config.type = "server"
-  config.server_name = "New FatMusic Server"
-  config.server_key = ""
-  config.max_history = 20
-  config.max_playlist = 100
-  config.broadcast_radio = false
-  config.keepalive_ping_every = 5
-  config.broadcast_song_info_every = 5
-
-  setup_complete()
-end
-
-
 local function replace_char_at(str, x, new)
   if x <= 1 then
     return new .. str:sub(2)
@@ -60,14 +26,16 @@ local function get_keys(message, ...)
   local descriptions = table.pack(...)
   local _keys = {}
   print(message)print()
+  term.setTextColor(colors.white)
 
   for i, description in ipairs(descriptions) do
-    description = "  " .. description
+    local positive = description:match(":(.)$"):lower() == 'y'
+    description = "  " .. description:match("^(.+):")
     local p1, p2 = description:find("%[.%]")
     local bg = ('f'):rep(#description)
     local fg = ('0'):rep(#description)
     for j = p1, p2 do
-      fg = replace_char_at(fg, j, '1')
+      fg = replace_char_at(fg, j, positive and 'd' or 'e')
     end
 
     term.blit(description, fg, bg)
@@ -91,6 +59,50 @@ local function get_keys(message, ...)
   end
 end
 
+local function setup_complete()
+  print("Done. Writing config.")
+  file_helper.serialize(FILES.CONFIG, config)
+  print("Done. You can relaunch this program now.")
+  error("", 0)
+end
+
+local function setup_client()
+  -- setup configurations
+  config.type = "client"
+  config.default_server = "None"
+  config.server_enc_key = ""
+  config.keepalive_timeout = 12
+
+  setup_complete()
+end
+
+local function setup_server()
+  -- warn user of startup overwrite.
+  term.setTextColor(colors.orange)
+  local key = get_keys(
+    "Warning: Setting up the server will overwrite /startup.lua! Are you sure you want to do this?",
+      "[y]es:y",
+      "[n]o:n"
+  )
+
+  if key == keys.n then
+    error("Setup cancelled.", -1)
+  end
+
+  -- setup configurations
+  config.type = "server"
+  config.server_name = "New FatMusic Server"
+  config.server_enc_key = ""
+  config.max_history = 20
+  config.max_playlist = 100
+  config.broadcast_radio = false
+  config.keepalive_ping_every = 5
+  config.broadcast_song_info_every = 5
+  config.server_hidden = false
+
+  setup_complete()
+end
+
 if not config.type then
   term.setBackgroundColor(colors.black)
   term.setTextColor(colors.white)
@@ -106,9 +118,9 @@ if not config.type then
     print()
     local key = get_keys(
       "Would you like to set this computer up as a client or server?",
-      "[c]lient",
-      "[s]erver",
-      "[e]xit"
+      "[c]lient:y",
+      "[s]erver:y",
+      "[e]xit:n"
     )
     if key == keys.e then
       error("Setup cancelled.", -1)
