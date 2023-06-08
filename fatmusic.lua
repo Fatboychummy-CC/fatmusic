@@ -46,16 +46,33 @@ local function get_keys(message, ...)
   term.blit("> ", '44', 'ff')
   term.setCursorBlink(true)
 
+  local function flash(color)
+    local x, y = term.getCursorPos()
+    term.setBackgroundColor(color)
+    term.setCursorBlink(false)
+    term.write("     ")
+    sleep()
+    term.setCursorPos(x, y)
+    term.setBackgroundColor(colors.black)
+    term.setCursorBlink(true)
+    term.write("     ")
+    term.setCursorPos(x, y)
+  end
+
   while true do
     local _, key_pressed = os.pullEvent("key")
+
     for _, _key in ipairs(_keys) do
       if key_pressed == _key then
+        flash(colors.green)
         print(keys.getName(key_pressed))
         term.setCursorBlink(false)
         sleep(0.1) -- prevent weirdness with key_up events.
         return key_pressed
       end
     end
+
+    flash(colors.red)
   end
 end
 
