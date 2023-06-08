@@ -5,14 +5,43 @@ local file_helper = require "libs.file_helper"
 local display_utils = require "libs.display_utils"
 local button = require "libs.button"
 
-local config = file_helper.unserialize("config.lson", {})
+local FILES = {
+  CONFIG = "config.lson"
+}
+
+local config = file_helper.unserialize(FILES.CONFIG, {})
+
+local function setup_complete()
+  print("Done. Writing config.")
+  file_helper.serialize(FILES.CONFIG, config)
+  print("Done. You can relaunch this program now.")
+  error("", 0)
+end
 
 local function setup_client()
+  -- setup configurations
+  config.type = "client"
+  config.default_server = "None"
+  config.server_key = ""
+  config.keepalive_timeout = 12
 
+  setup_complete()
 end
 
 local function setup_server()
   -- warn user of startup overwrite.
+
+  -- setup configurations
+  config.type = "server"
+  config.server_name = "New FatMusic Server"
+  config.server_key = ""
+  config.max_history = 20
+  config.max_playlist = 100
+  config.broadcast_radio = false
+  config.keepalive_ping_every = 5
+  config.broadcast_song_info_every = 5
+
+  setup_complete()
 end
 
 
@@ -85,11 +114,9 @@ if not config.type then
       error("Setup cancelled.", -1)
     elseif key == keys.c then
       setup_client()
-      print("Done.")
       return
     elseif key == keys.s then
       setup_server()
-      print("Done.")
       return
     end
   end
