@@ -1,2 +1,5 @@
 .vscode
 config.lson
+libs
+test_*
+LLS
