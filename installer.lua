@@ -5,7 +5,9 @@ local to_get = {
   --"paste:filename.lua:pastecode", -- to download from pastebin
   "libs/button.lua:button.lua", -- to download from the Fatboychummy-CC/Libraries repository.
   "libs/display_utils.lua:display_utils.lua",
-  "libs/file_helper.lua:file_helper.lua"
+  "libs/file_helper.lua:file_helper.lua",
+  "paste:libs/ecc.lua:ZGJGBJdg",
+  "extern:fatmusic.lua:https://raw.githubusercontent.com/Fatboychummy-CC/develop/main/fatmusic.lua",
 }
 local program_name = ""
 
