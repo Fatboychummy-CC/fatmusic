@@ -4,6 +4,7 @@
 local file_helper = require "libs.file_helper"
 local display_utils = require "libs.display_utils"
 local button = require "libs.button"
+local ecc = require "libs.ecc"
 
 local FILES = {
   CONFIG = "config.lson"
@@ -149,4 +150,276 @@ if not config.type then
       return
     end
   end
+end
+
+local function client_settings()
+
+end
+
+local function server_settings()
+
+end
+
+--- Open the "server" menu in the client.
+local function client_server_menu(btn)
+
+end
+
+--- Send a server request for the previous song.
+local function prev_song(btn, force)
+
+end
+
+--- Send a server request to play or pause.
+local function play_pause(btn)
+
+end
+
+local function next_song(btn, two)
+
+end
+
+local function playlist_select(btn)
+
+end
+
+--- Run the client system.
+local function run_client()
+  local w, h = term.getSize()
+  local set = button.set()
+
+  local server_button = set.new {
+    x = 2,
+    y = 2,
+    w = 6,
+    h = 3,
+    text = "SRVR",
+    bg_color = colors.lightGray,
+    txt_color = colors.black,
+    highlight_bg_color = colors.white,
+    highlight_txt_color = colors.black,
+    text_centered = true,
+    top_bar = true,
+    bottom_bar = true,
+    left_bar = true,
+    right_bar = true,
+    bar_color = colors.gray,
+    highlight_bar_color = colors.lightGray,
+    callback = client_server_menu
+  }
+
+  --- Previous button, one press will restart the song, double press (or if song is at 00:00 to 00:02) will go to the previous song.
+  local prev_button = set.new {
+    x = 17,
+    y = 2,
+    w = 3,
+    h = 3,
+    text = "<",
+    bg_color = colors.lightGray,
+    txt_color = colors.black,
+    highlight_bg_color = colors.white,
+    highlight_txt_color = colors.black,
+    text_centered = true,
+    top_bar = true,
+    bottom_bar = true,
+    left_bar = true,
+    right_bar = true,
+    bar_color = colors.gray,
+    highlight_bar_color = colors.lightGray,
+    callback = prev_song
+  }
+
+  --- Play/pause button.
+  local pp_button = set.new {
+    x = 20,
+    y = 2,
+    w = 3,
+    h = 3,
+    text = "\x10", -- toggle to \x13 when song is playing.
+    bg_color = colors.lightGray,
+    txt_color = colors.black,
+    highlight_bg_color = colors.white,
+    highlight_txt_color = colors.black,
+    text_centered = true,
+    top_bar = true,
+    bottom_bar = true,
+    left_bar = true,
+    right_bar = true,
+    bar_color = colors.gray,
+    highlight_bar_color = colors.lightGray,
+    callback = play_pause
+  }
+
+  --- Next song button.
+  local next_button = set.new {
+    x = 23,
+    y = 2,
+    w = 3,
+    h = 3,
+    text = ">",
+    bg_color = colors.lightGray,
+    txt_color = colors.black,
+    highlight_bg_color = colors.white,
+    highlight_txt_color = colors.black,
+    text_centered = true,
+    top_bar = true,
+    bottom_bar = true,
+    left_bar = true,
+    right_bar = true,
+    bar_color = colors.gray,
+    highlight_bar_color = colors.lightGray,
+    callback = next_song
+  }
+
+  --- Jump to the previous song in the queue.
+  local song_previous = set.new {
+    x = 2,
+    y = 8,
+    w = w - 2,
+    h = 2,
+    text = "No data",
+    bg_color = colors.lightGray,
+    txt_color = colors.black,
+    highlight_bg_color = colors.white,
+    highlight_txt_color = colors.black,
+    text_centered = false,
+    text_offset_x = 1,
+    text_offset_y = 0,
+    bottom_bar = true,
+    bar_color = colors.gray,
+    highlight_bar_color = colors.lightGray,
+    callback = function(btn)
+      prev_song(btn, true)
+    end
+  }
+
+  local song_current = set.new {
+    x = 2,
+    y = 10,
+    w = w - 2,
+    h = 2,
+    text = "No data",
+    bg_color = colors.lime,
+    txt_color = colors.black,
+    highlight_bg_color = colors.lime,
+    highlight_txt_color = colors.black,
+    text_centered = false,
+    text_offset_x = 1,
+    text_offset_y = 0,
+    bottom_bar = true,
+    bar_color = colors.green,
+    highlight_bar_color = colors.green,
+    callback = function()end -- do nothing!
+  }
+
+  local song_next = set.new {
+    x = 2,
+    y = 12,
+    w = w - 2,
+    h = 2,
+    text = "No data",
+    bg_color = colors.lightGray,
+    txt_color = colors.black,
+    highlight_bg_color = colors.white,
+    highlight_txt_color = colors.black,
+    text_centered = false,
+    text_offset_x = 1,
+    text_offset_y = 0,
+    bottom_bar = true,
+    bar_color = colors.gray,
+    highlight_bar_color = colors.lightGray,
+    callback = next_song
+  }
+
+  local song_next2 = set.new {
+    x = 2,
+    y = 14,
+    w = w - 2,
+    h = 2,
+    text = "No data",
+    bg_color = colors.lightGray,
+    txt_color = colors.black,
+    highlight_bg_color = colors.white,
+    highlight_txt_color = colors.black,
+    text_centered = false,
+    text_offset_x = 1,
+    text_offset_y = 0,
+    bottom_bar = true,
+    bar_color = colors.gray,
+    highlight_bar_color = colors.lightGray,
+    callback = function(btn)
+      next_song(btn, true)
+    end
+  }
+
+  local playlist_select_button = set.new {
+    x = 2,
+    y = 17,
+    w = 11,
+    h = 3,
+    text = "Playlists",
+    bg_color = colors.lightGray,
+    txt_color = colors.black,
+    highlight_bg_color = colors.white,
+    highlight_txt_color = colors.black,
+    text_centered = true,
+    top_bar = true,
+    bottom_bar = true,
+    left_bar = true,
+    right_bar = true,
+    bar_color = colors.gray,
+    highlight_bar_color = colors.lightGray,
+    callback = playlist_select
+  }
+
+  local songs_button = set.new {
+    x = 19,
+    y = 17,
+    w = 7,
+    h = 3,
+    text = "Songs",
+    bg_color = colors.lightGray,
+    txt_color = colors.black,
+    highlight_bg_color = colors.white,
+    highlight_txt_color = colors.black,
+    text_centered = true,
+    top_bar = true,
+    bottom_bar = true,
+    left_bar = true,
+    right_bar = true,
+    bar_color = colors.gray,
+    highlight_bar_color = colors.lightGray,
+    callback = playlist_select
+  }
+
+
+  local function draw()
+    set.draw()
+    display_utils.fast_box(8, 2, 9, 3, colors.lightBlue)
+    display_utils.fast_box(2, 6, w - 2, 1, colors.gray)
+    display_utils.fast_box(2, 5, w - 2, 1, colors.gray, '\x8f', colors.black)
+    display_utils.fast_box(2, 7, w - 2, 1, colors.black, '\x83', colors.gray)
+    display_utils.fast_box(7, 6, 14, 1, colors.black)
+
+  end
+
+  term.setBackgroundColor(colors.black)
+  term.clear()
+  draw()
+  while true do
+    set.event(os.pullEvent())
+    draw()
+  end
+end
+
+local function run_server()
+
+end
+
+if config.type == "client" then
+  run_client()
+elseif config.type == "server" then
+  run_server()
+else
+  error(("Unknown config type: %s"):format(config.type), 0)
 end
