@@ -16,12 +16,10 @@ local config = file_helper.unserialize(FILES.CONFIG, {})
 local server_info = {
   connected_server = nil,
   song_info = nil,
-  --[[connected_server = "Rock Station 2",
-  song_info = {
-    name = "Thunderstruck",
-    genre = "Hard Rock",
-    artist = "AC/DC"
-  },]]
+  playlist = {
+    list = {},
+    current = 0
+  },
 }
 
 local function replace_char_at(str, x, new)
@@ -547,6 +545,38 @@ local function run_client()
             draw_data.genre_or_artist_offset.offset + 9
           ))
         end
+
+        -- if server is running a playlist...
+        if server_info.playlist.current ~= 0 then
+          local previous_song_info = server_info.playlist.list[server_info.playlist.current - 1]
+          local next_song_info = server_info.playlist.list[server_info.playlist.current + 1]
+          local next_2_song_info = server_info.playlist.list[server_info.playlist.current + 2]
+          
+          -- write previous song
+          if previous_song_info then
+            song_previous.text = previous_song_info.name:sub(1, w - 4)
+          else
+            song_previous.text = "---"
+          end
+
+          
+
+          -- next song
+          if next_song_info then
+            song_next.text =  next_song_info.name:sub(1, w - 4)
+          else
+            song_next.text = "---"
+          end
+
+          -- next 2 song
+          if next_2_song_info then
+            song_next2.text = next_2_song_info.name:sub(1, w - 4)
+          else
+            song_next2.text = "---"
+          end
+        end
+        -- current song
+        song_current.text = server_info.song_info.name:sub(1, w - 4)
       end
     else
       term.setTextColor(colors.red)
