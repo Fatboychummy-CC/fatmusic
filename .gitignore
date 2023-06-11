@@ -2,4 +2,4 @@
 config.lson
 libs
 test_*
-LLS
+extern-LLS

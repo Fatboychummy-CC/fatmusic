@@ -12,6 +12,18 @@ local FILES = {
 
 local config = file_helper.unserialize(FILES.CONFIG, {})
 
+---@type server_info
+local server_info = {
+  connected_server = nil,
+  song_info = nil,
+  --[[connected_server = "Rock Station 2",
+  song_info = {
+    name = "Thunderstruck",
+    genre = "Hard Rock",
+    artist = "AC/DC"
+  },]]
+}
+
 local function replace_char_at(str, x, new)
   if x <= 1 then
     return new .. str:sub(2)
@@ -393,22 +405,171 @@ local function run_client()
   }
 
 
+  local draw_data = {
+    displaying_artist = false,
+    song_name_offset = {
+      offset = 0,
+      offset_hold = 0,
+    },
+    server_name_offset = {
+      offset = 0,
+      offset_hold = 0
+    },
+    genre_or_artist_offset = {
+      offset = 0,
+      offset_hold = 0
+    },
+    blink_server = false,
+    next_tick = os.epoch "utc" + 500
+  }
+
+  local function do_offset_text(text, len, data)
+    -- If song name is at start. Hold for a short time.
+    if data.offset == 0 then
+      if data.offset_hold < 5 then
+        data.offset_hold = data.offset_hold + 1
+      elseif #text <= len then
+        -- Text is short, don't offset increase.
+        data.offset = 0
+        data.offset_hold = 0
+        return true
+      else
+        -- stop hold.
+        data.offset_hold = 0
+        data.offset = 1
+      end
+    else
+      -- if not holding, offset increase by 1 more.
+      data.offset = data.offset + 1
+
+      -- Then check if we're at the end.
+      if data.offset > #text - 9 then
+        -- If so, stop overflow.
+        data.offset = #text - 9
+
+        -- and increment hold.
+        data.offset_hold = data.offset_hold + 1
+
+        -- if we go above max hold time
+        if data.offset_hold >= 5 then
+          -- reset to start of song name.
+          data.offset = 0
+          data.offset_hold = 0
+          return true -- it toggled back.
+        end
+      end
+    end
+
+    return false
+  end
+
   local function draw()
+    local tick_up = os.epoch "utc" >= draw_data.next_tick
+
+    -- If the system has ticked (half second)
+    if tick_up then
+      -- set the next tick time.
+      draw_data.next_tick = os.epoch "utc" + 500
+
+      if server_info.connected_server then
+        draw_data.blink_server = false
+        do_offset_text(server_info.connected_server, 9, draw_data.server_name_offset)
+
+        -- if a song is selected
+        if server_info.song_info then
+          -- offset the song info.
+          do_offset_text(server_info.song_info.name, 9, draw_data.song_name_offset)
+
+          -- offset the artist or genre.
+          if draw_data.displaying_artist then
+            if do_offset_text(server_info.song_info.artist, 9, draw_data.genre_or_artist_offset) then
+              draw_data.displaying_artist = false
+            end
+          else
+            if do_offset_text(server_info.song_info.genre, 9, draw_data.genre_or_artist_offset) then
+              draw_data.displaying_artist = true
+            end
+          end
+        end
+      else
+        server_button.bar_color = server_button.bar_color == colors.red and colors.gray or colors.red
+      end
+    end
+
     set.draw()
+
+    -- server info box
     display_utils.fast_box(8, 2, 9, 3, colors.lightBlue)
+
+    -- song fill bar
     display_utils.fast_box(2, 6, w - 2, 1, colors.gray)
+
+    -- top of song fill bar
     display_utils.fast_box(2, 5, w - 2, 1, colors.gray, '\x8f', colors.black)
+
+    -- bottom of song fill bar
     display_utils.fast_box(2, 7, w - 2, 1, colors.black, '\x83', colors.gray)
+
+    -- empty spot in song fill bar
     display_utils.fast_box(7, 6, 14, 1, colors.black)
 
+    -- write server name
+    term.setBackgroundColor(colors.lightBlue)
+    if server_info.connected_server then
+      term.setTextColor(colors.blue)
+      term.setCursorPos(8, 2)
+      
+      term.write(server_info.connected_server:sub(
+        draw_data.server_name_offset.offset + 1,
+        draw_data.server_name_offset.offset + 9
+      ))
+
+      term.setTextColor(colors.black)
+      -- write song name and whatnot
+      if server_info.song_info then
+        term.setCursorPos(8, 3)
+        term.write(server_info.song_info.name:sub(
+          draw_data.song_name_offset.offset + 1,
+          draw_data.song_name_offset.offset + 9
+        ))
+
+        term.setTextColor(colors.cyan)
+        -- write genre or artist
+        term.setCursorPos(8, 4)
+        if draw_data.displaying_artist then
+          term.write(server_info.song_info.artist:sub(
+            draw_data.genre_or_artist_offset.offset + 1,
+            draw_data.genre_or_artist_offset.offset + 9
+          ))
+        else
+          term.write(server_info.song_info.genre:sub(
+            draw_data.genre_or_artist_offset.offset + 1,
+            draw_data.genre_or_artist_offset.offset + 9
+          ))
+        end
+      end
+    else
+      term.setTextColor(colors.red)
+      term.setCursorPos(8, 2)
+      term.write("No server")
+    end
   end
 
   term.setBackgroundColor(colors.black)
   term.clear()
   draw()
+
+  local draw_timer = os.startTimer(0.1)
   while true do
-    set.event(os.pullEvent())
-    draw()
+    local event = table.pack(os.pullEvent())
+
+    if event[1] == "timer" and event[2] == draw_timer then
+      draw()
+      draw_timer = os.startTimer(0.1)
+    else
+      set.event(table.unpack(event, 1, event.n))
+      draw()
+    end
   end
 end
 
