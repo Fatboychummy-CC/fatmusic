@@ -17,3 +17,4 @@
 ---@field artist string The artist of the song.
 ---@field length integer The length of the song in seconds (rounded up).
 ---@field playing boolean If the song is currently playing (true) or paused (false).
+---@field current_position integer The current position in the song. Is -1 if not playing.

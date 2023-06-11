@@ -402,6 +402,17 @@ local function run_client()
     callback = playlist_select
   }
 
+  -- percent bar.
+  local percent_played = display_utils.high_fidelity_percent_bar {
+    x = 7,
+    y = 6,
+    w = 14,
+    h = 1,
+    background = colors.black,
+    filled = colors.blue,
+    current = colors.cyan,
+    allow_overflow = false,
+  }
 
   local draw_data = {
     displaying_artist = false,
@@ -461,6 +472,16 @@ local function run_client()
     return false
   end
 
+  --- Return a timestamp in the "xx:xx" format.
+  ---@param seconds integer The amount of seconds to display.
+  local function time_stamp(seconds)
+    if seconds == -1 then
+      return "--:--"
+    end
+
+    return ("%02d:%02d"):format(math.floor(seconds / 60), seconds % 60)
+  end
+
   local function draw()
     local tick_up = os.epoch "utc" >= draw_data.next_tick
 
@@ -475,6 +496,7 @@ local function run_client()
 
         -- if a song is selected
         if server_info.song_info then
+          server_info.song_info.current_position = server_info.song_info.current_position + 0.5
           -- offset the song info.
           do_offset_text(server_info.song_info.name, 9, draw_data.song_name_offset)
 
@@ -551,15 +573,13 @@ local function run_client()
           local previous_song_info = server_info.playlist.list[server_info.playlist.current - 1]
           local next_song_info = server_info.playlist.list[server_info.playlist.current + 1]
           local next_2_song_info = server_info.playlist.list[server_info.playlist.current + 2]
-          
+
           -- write previous song
           if previous_song_info then
             song_previous.text = previous_song_info.name:sub(1, w - 4)
           else
             song_previous.text = "---"
           end
-
-          
 
           -- next song
           if next_song_info then
@@ -577,12 +597,35 @@ local function run_client()
         end
         -- current song
         song_current.text = server_info.song_info.name:sub(1, w - 4)
+
+        if server_info.song_info.playing then
+          pp_button.text = '\x13'
+        else
+          pp_button.text = '\x10'
+        end
+
+        -- Display the current song times.
+        term.setBackgroundColor(colors.gray)
+        term.setTextColor(colors.white)
+
+        -- Current position
+        term.setCursorPos(2, 6)
+        term.write(time_stamp(server_info.song_info.current_position))
+
+        -- total time
+        term.setCursorPos(21, 6)
+        term.write(time_stamp(server_info.song_info.length))
+
+        -- percent played
+        percent_played.percent = server_info.song_info.current_position / server_info.song_info.length
       end
     else
       term.setTextColor(colors.red)
       term.setCursorPos(8, 2)
       term.write("No server")
     end
+
+    percent_played.draw()
   end
 
   term.setBackgroundColor(colors.black)
