@@ -648,7 +648,96 @@ local function run_client()
 end
 
 local function run_server()
+  local w, h = term.getSize()
+  local set = button.set()
 
+  local config_button = set.new {
+    x = 3,
+    y = 15,
+    w = 8,
+    h = 3,
+    text = "CONFIG",
+    bg_color = colors.lightGray,
+    txt_color = colors.black,
+    highlight_bg_color = colors.white,
+    highlight_txt_color = colors.black,
+    text_centered = true,
+    top_bar = true,
+    bottom_bar = true,
+    left_bar = true,
+    right_bar = true,
+    bar_color = colors.gray,
+    highlight_bar_color = colors.lightGray,
+    callback = server_settings
+  }
+
+  local start_stop_button = set.new {
+    x = 41,
+    y = 4,
+    w = 8,
+    h = 3,
+    text = "STOP",
+    bg_color = colors.red,
+    txt_color = colors.white,
+    highlight_bg_color = colors.orange,
+    highlight_txt_color = colors.white,
+    text_centered = true,
+    top_bar = true,
+    bottom_bar = true,
+    left_bar = true,
+    right_bar = true,
+    bar_color = colors.yellow,
+    highlight_bar_color = colors.white,
+    callback = function() end
+  }
+
+  local reset_button = set.new {
+    x = 42,
+    y = 10,
+    w = 7,
+    h = 3,
+    text = "RESET",
+    bg_color = colors.red,
+    txt_color = colors.white,
+    highlight_bg_color = colors.orange,
+    highlight_txt_color = colors.white,
+    text_centered = true,
+    top_bar = true,
+    bottom_bar = true,
+    left_bar = true,
+    right_bar = true,
+    bar_color = colors.orange,
+    highlight_bar_color = colors.yellow,
+    callback = function() end
+  }
+
+  local function draw_server()
+    term.setBackgroundColor(colors.black)
+    term.clear()
+
+    -- Server status main box
+    display_utils.fast_box(3, 3, w - 4, 5, colors.gray)
+
+    -- Server status text box
+    display_utils.fast_box(4, 4, w - 25, 3, colors.lightGray)
+
+    -- Server status status box
+    display_utils.fast_box(31, 4, 9, 3, colors.green)
+
+    -- Playlist info box
+    display_utils.fast_box(3, 9, w - 4, 5, colors.gray)
+
+    -- draw all the buttons.
+    set.draw()
+  end
+
+  draw_server()
+  while true do
+    local event = table.pack(os.pullEvent())
+
+    set.event(table.unpack(event, 1, event.n))
+    draw_server()
+  end
 end
 
 if config.type == "client" then
