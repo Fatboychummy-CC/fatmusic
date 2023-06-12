@@ -77,6 +77,8 @@ local function get_keys(message, ...)
     for _, _key in ipairs(_keys) do
       if key_pressed == _key then
         flash(colors.green)
+        sleep()
+        flash(colors.green)
         print(keys.getName(key_pressed))
         term.setCursorBlink(false)
         sleep(0.1) -- prevent weirdness with key_up events.
