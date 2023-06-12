@@ -36,7 +36,8 @@ end
 local function get_keys(message, ...)
   local descriptions = table.pack(...)
   local _keys = {}
-  print(message)print()
+  print(message)
+  print()
   term.setTextColor(colors.white)
 
   for i, description in ipairs(descriptions) do
@@ -109,8 +110,8 @@ local function setup_server()
   term.setTextColor(colors.orange)
   local key = get_keys(
     "Warning: Setting up the server will overwrite /startup.lua! Are you sure you want to do this?",
-      "[y]es:y",
-      "[n]o:n"
+    "[y]es:y",
+    "[n]o:n"
   )
 
   if key == keys.n then
@@ -319,7 +320,7 @@ local function run_client()
     bottom_bar = true,
     bar_color = colors.green,
     highlight_bar_color = colors.green,
-    callback = function()end -- do nothing!
+    callback = function() end -- do nothing!
   }
 
   local song_next = set.new {
@@ -482,7 +483,7 @@ local function run_client()
     return ("%02d:%02d"):format(math.floor(seconds / 60), seconds % 60)
   end
 
-  local function draw()
+  local function draw_client()
     local tick_up = os.epoch "utc" >= draw_data.next_tick
 
     -- If the system has ticked (half second)
@@ -538,7 +539,7 @@ local function run_client()
     if server_info.connected_server then
       term.setTextColor(colors.blue)
       term.setCursorPos(8, 2)
-      
+
       term.write(server_info.connected_server:sub(
         draw_data.server_name_offset.offset + 1,
         draw_data.server_name_offset.offset + 9
@@ -583,7 +584,7 @@ local function run_client()
 
           -- next song
           if next_song_info then
-            song_next.text =  next_song_info.name:sub(1, w - 4)
+            song_next.text = next_song_info.name:sub(1, w - 4)
           else
             song_next.text = "---"
           end
@@ -630,18 +631,18 @@ local function run_client()
 
   term.setBackgroundColor(colors.black)
   term.clear()
-  draw()
+  draw_client()
 
   local draw_timer = os.startTimer(0.1)
   while true do
     local event = table.pack(os.pullEvent())
 
     if event[1] == "timer" and event[2] == draw_timer then
-      draw()
+      draw_client()
       draw_timer = os.startTimer(0.1)
     else
       set.event(table.unpack(event, 1, event.n))
-      draw()
+      draw_client()
     end
   end
 end
