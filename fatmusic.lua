@@ -5,6 +5,9 @@ local file_helper = require "libs.file_helper"
 local display_utils = require "libs.display_utils"
 local button = require "libs.button"
 local ecc = require "libs.ecc"
+local logging = require "libs.logging"
+
+local main_context = logging.create_context "Main"
 
 local FILES = {
   CONFIG = "config.lson"
@@ -91,23 +94,27 @@ local function get_keys(message, ...)
 end
 
 local function setup_complete()
-  print("Done. Writing config.")
+  main_context.info "Done. Writing config."
   file_helper.serialize(FILES.CONFIG, config)
-  print("Done. You can relaunch this program now.")
+  main_context.info "Done. You can relaunch this program now."
   error("", 0)
 end
 
 local function setup_client()
   -- setup configurations
+  main_context.info "Setup as client."
+
   config.type = "client"
   config.default_server = "None"
   config.server_enc_key = ""
   config.keepalive_timeout = 12
+  config.log_level = logging.LOG_LEVEL.DEBUG
 
   setup_complete()
 end
 
 local function setup_server()
+  main_context.info "Setup as server."
   -- warn user of startup overwrite.
   term.setTextColor(colors.orange)
   local key = get_keys(
@@ -117,8 +124,11 @@ local function setup_server()
   )
 
   if key == keys.n then
+    main_context.error "Setup cancelled."
     error("Setup cancelled.", -1)
   end
+
+  main_context.info "Setup continues."
 
   -- setup configurations
   config.type = "server"
@@ -131,6 +141,7 @@ local function setup_server()
   config.broadcast_song_info_every = 5
   config.server_hidden = false
   config.server_running = false
+  config.log_level = logging.LOG_LEVEL.DEBUG
 
   setup_complete()
 end
@@ -140,10 +151,10 @@ if not config.type then
   term.setTextColor(colors.white)
   term.clear()
   term.setCursorPos(1, 1)
-  print("First launch setup...")
+  main_context.info "Running first-time setup."
 
   if pocket then
-    print("Pocket computer detected, setting up as a client.")
+    main_context.info "Pocket computer detected, setting up as a client."
     setup_client()
     return
   else
@@ -155,6 +166,7 @@ if not config.type then
       "[e]xit:n"
     )
     if key == keys.e then
+      main_context.error "Setup cancelled."
       error("Setup cancelled.", -1)
     elseif key == keys.c then
       setup_client()
@@ -165,6 +177,11 @@ if not config.type then
     end
   end
 end
+local w, h = term.getSize()
+local log_win = window.create(term.current(), 1, 1, w, h, false)
+logging.set_window(log_win)
+logging.set_level(config.log_level)
+main_context.debug "Created custom log window."
 
 local function client_settings()
 
@@ -203,7 +220,6 @@ end
 
 --- Run the client system.
 local function run_client()
-  local w, h = term.getSize()
   local set = button.set()
 
   local server_button = set.new {
@@ -655,7 +671,6 @@ local function run_client()
 end
 
 local function run_server()
-  local w, h = term.getSize()
   local set = button.set()
 
   local server_data = {
@@ -820,10 +835,20 @@ local function run_server()
   end
 end
 
-if config.type == "client" then
-  run_client()
-elseif config.type == "server" then
-  run_server()
-else
-  error(("Unknown config type: %s"):format(config.type), 0)
+local ok, err = pcall(function()
+  if config.type == "client" then
+    main_context.debug "Running client."
+    run_client()
+  elseif config.type == "server" then
+    main_context.debug "Running server."
+    run_server()
+  else
+    error(("Unknown config type: %s"):format(config.type), 0)
+  end
+end)
+
+if not ok then
+  main_context.error(err)
+  logging.dump_log(fs.combine(file_helper.working_directory, ".fatmusic_log_dump"))
+  error(err, 0)
 end

@@ -3,3 +3,4 @@ config.lson
 libs
 test_*
 extern-LLS
+.fatmusic_log_dump
