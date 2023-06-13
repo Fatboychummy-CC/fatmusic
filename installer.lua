@@ -6,6 +6,7 @@ local to_get = {
   "libs/button.lua:button.lua", -- to download from the Fatboychummy-CC/Libraries repository.
   "libs/display_utils.lua:display_utils.lua",
   "libs/file_helper.lua:file_helper.lua",
+  "libs/logging.lua:logging.lua",
   "paste:libs/ecc.lua:ZGJGBJdg",
   "extern:fatmusic.lua:https://raw.githubusercontent.com/Fatboychummy-CC/develop/main/fatmusic.lua",
 }
