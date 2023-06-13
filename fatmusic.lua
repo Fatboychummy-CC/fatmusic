@@ -130,6 +130,7 @@ local function setup_server()
   config.keepalive_ping_every = 5
   config.broadcast_song_info_every = 5
   config.server_hidden = false
+  config.server_running = false
 
   setup_complete()
 end
@@ -193,6 +194,10 @@ local function next_song(btn, two)
 end
 
 local function playlist_select(btn)
+
+end
+
+local function display_logs()
 
 end
 
@@ -653,6 +658,13 @@ local function run_server()
   local w, h = term.getSize()
   local set = button.set()
 
+  local server_data = {
+    song_queue = {
+      position = 0,
+    },
+    playing = false
+  }
+
   local config_button = set.new {
     x = 3,
     y = 15,
@@ -690,7 +702,9 @@ local function run_server()
     right_bar = true,
     bar_color = colors.yellow,
     highlight_bar_color = colors.white,
-    callback = function() end
+    callback = function()
+      config.server_running = not config.server_running
+    end
   }
 
   local reset_button = set.new {
@@ -713,6 +727,26 @@ local function run_server()
     callback = function() end
   }
 
+  local logs_button = set.new {
+    x = 44,
+    y = 15,
+    w = 6,
+    h = 3,
+    text = "LOGS",
+    bg_color = colors.lightGray,
+    txt_color = colors.black,
+    highlight_bg_color = colors.white,
+    highlight_txt_color = colors.black,
+    text_centered = true,
+    top_bar = true,
+    bottom_bar = true,
+    left_bar = true,
+    right_bar = true,
+    bar_color = colors.gray,
+    highlight_bar_color = colors.lightGray,
+    callback = function() end
+  }
+
   local function draw_server()
     term.setBackgroundColor(colors.black)
     term.clear()
@@ -724,10 +758,54 @@ local function run_server()
     display_utils.fast_box(4, 4, w - 25, 3, colors.lightGray)
 
     -- Server status status box
-    display_utils.fast_box(31, 4, 9, 3, colors.green)
+    display_utils.fast_box(31, 4, 9, 3, config.server_running and colors.green or colors.red)
+
+    -- write server status
+    term.setCursorPos(10, 5)
+    term.blit("SERVER STATUS", "fffffffffffff", "8888888888888")
+
+    -- set the running/stopped things
+    if config.server_running then
+      start_stop_button.bar_color = colors.yellow
+      start_stop_button.bg_color = colors.red
+      start_stop_button.highlight_bg_color = colors.orange
+      start_stop_button.text = "STOP"
+
+      term.setCursorPos(32, 5)
+      term.blit("RUNNING", "0000000", "ddddddd")
+    else
+      start_stop_button.bar_color = colors.lime
+      start_stop_button.bg_color = colors.green
+      start_stop_button.highlight_bg_color = colors.lime
+      start_stop_button.text = "STRT"
+
+      term.setCursorPos(32, 5)
+      term.blit("STOPPED", "0000000", "eeeeeee")
+    end
 
     -- Playlist info box
     display_utils.fast_box(3, 9, w - 4, 5, colors.gray)
+
+    term.setBackgroundColor(colors.gray)
+    term.setTextColor(colors.white)
+
+    -- Current song
+    term.setCursorPos(4, 10)
+    term.write(("Current song   : %20s"):format(
+      server_data.playing and server_data.song_queue[server_data.song_queue.position].name
+      or "None"
+    ))
+
+    -- playlist length
+    term.setCursorPos(4, 11)
+    term.write(("Playlist length: %20d"):format(
+      server_data.playing and #server_data.song_queue - server_data.song_queue.position + 1
+      or 0
+    ))
+
+    -- playing
+    term.setCursorPos(4, 12)
+    term.write(("Playing        : %20s"):format(server_data.playing and "true" or "false"))
 
     -- draw all the buttons.
     set.draw()
