@@ -8,9 +8,11 @@ local ecc = require "libs.ecc"
 local logging = require "libs.logging"
 
 local main_context = logging.create_context "Main"
+local w, h = term.getSize()
 
 local FILES = {
-  CONFIG = "config.lson"
+  CONFIG = "config.lson",
+  DUMP_FILE = fs.combine(file_helper.working_directory, ".fatmusic_log_dump")
 }
 
 local config = file_helper.unserialize(FILES.CONFIG, {})
@@ -177,18 +179,13 @@ if not config.type then
     end
   end
 end
-local w, h = term.getSize()
-local log_win = window.create(term.current(), 1, 1, w, h, false)
-logging.set_window(log_win)
-logging.set_level(config.log_level)
-main_context.debug "Created custom log window."
 
 local function client_settings()
 
 end
 
 local function server_settings()
-
+  error("omg array index out of bounds or something lolololololol")
 end
 
 --- Open the "server" menu in the client.
@@ -214,8 +211,199 @@ local function playlist_select(btn)
 
 end
 
-local function display_logs()
+local function dump_logs()
+  if fs.exists(FILES.DUMP_FILE) then
+    local set = button.set()
 
+    local continue = false
+    local clicked = false
+    local no = set.new {
+      x = pocket and 10 or 32,
+      y = 12,
+      w = 6,
+      h = 3,
+      text = "NO",
+      bg_color = colors.lightGray,
+      txt_color = colors.black,
+      highlight_bg_color = colors.white,
+      highlight_txt_color = colors.black,
+      text_centered = true,
+      top_bar = true,
+      bottom_bar = true,
+      left_bar = true,
+      right_bar = true,
+      bar_color = colors.gray,
+      highlight_bar_color = colors.lightGray,
+      callback = function()
+        clicked = true
+      end
+    }
+
+    local yes = set.new {
+      x = pocket and 5 or 15,
+      y = 12,
+      w = 5,
+      h = 3,
+      text = "YES",
+      bg_color = colors.lightGray,
+      txt_color = colors.black,
+      highlight_bg_color = colors.white,
+      highlight_txt_color = colors.black,
+      text_centered = true,
+      top_bar = true,
+      bottom_bar = true,
+      left_bar = true,
+      right_bar = true,
+      bar_color = colors.gray,
+      highlight_bar_color = colors.lightGray,
+      callback = function()
+        clicked = true
+        continue = true
+      end
+    }
+
+    local function redraw()
+      display_utils.fast_box(
+        math.ceil(w / 2 - 13), -- pocket and 3 or 13
+        math.ceil(h / 2 - 6), -- 4
+        27, -- pocket and 20 or 27
+        13, -- 13
+        colors.gray
+      )
+      display_utils.fast_box(
+        math.ceil(w / 2 - 12),-- pocket and 4 or 14
+        math.ceil(h / 2 - 5), -- 5
+        25, -- pocket and 18 or 25
+        11,
+        colors.white
+      )
+      set.draw()
+    end
+
+    while true do
+      redraw()
+      local event = table.pack(os.pullEvent())
+      set.event(table.unpack(event, 1, event.n))
+
+      if clicked then
+        if continue then
+          main_context.debug("Dumping log to", FILES.DUMP_FILE)
+          logging.dump_log(FILES.DUMP_FILE)
+        end
+        return
+      end
+    end
+  end
+end
+
+local log_win = window.create(term.current(), 1, 1, w, h - 5, false)
+logging.set_window(log_win)
+logging.set_level(config.log_level)
+main_context.debug "Created custom log window."
+--- Display the log window.
+local function display_logs(err)
+  local set = button.set()
+
+  local do_exit = false
+  local relaunch = false
+  local exit_button = set.new {
+    x = w - 7,
+    y = 16,
+    w = 6,
+    h = 3,
+    text = "EXIT",
+    bg_color = colors.yellow,
+    txt_color = colors.black,
+    highlight_bg_color = colors.white,
+    highlight_txt_color = colors.black,
+    text_centered = true,
+    top_bar = true,
+    bottom_bar = true,
+    left_bar = true,
+    right_bar = true,
+    bar_color = colors.gray,
+    highlight_bar_color = colors.lightGray,
+    callback = function()
+      do_exit = true
+    end
+  }
+
+  if type(err) == "string" and not pocket then
+    -- relaunch button
+    set.new {
+      x = w - 18,
+      y = 16,
+      w = 10,
+      h = 3,
+      text = "RELAUNCH",
+      bg_color = colors.green,
+      txt_color = colors.black,
+      highlight_bg_color = colors.yellow,
+      highlight_txt_color = colors.black,
+      text_centered = true,
+      top_bar = true,
+      bottom_bar = true,
+      left_bar = true,
+      right_bar = true,
+      bar_color = colors.gray,
+      highlight_bar_color = colors.lightGray,
+      callback = function()
+        do_exit = true
+        relaunch = true
+      end
+    }
+  end
+
+  local dump_button = set.new {
+    x = 2,
+    y = 16,
+    w = 11,
+    h = 3,
+    text = "DUMP LOGS",
+    bg_color = colors.blue,
+    txt_color = colors.black,
+    highlight_bg_color = colors.cyan,
+    highlight_txt_color = colors.black,
+    text_centered = true,
+    top_bar = true,
+    bottom_bar = true,
+    left_bar = true,
+    right_bar = true,
+    bar_color = colors.gray,
+    highlight_bar_color = colors.lightGray,
+    callback = dump_logs
+  }
+
+  local function redraw()
+    term.setBackgroundColor(colors.black)
+    term.clear()
+    log_win.redraw()
+    set.draw()
+    display_utils.fast_box(1, 14, w, 1, colors.gray)
+    term.setBackgroundColor(colors.gray)
+    term.setTextColor(colors.white)
+    term.setCursorPos(1, 14)
+    if type(err) == "string" then
+      term.write("System errored, viewing logs.")
+    else
+      term.write("Viewing logs.")
+    end
+  end
+
+  log_win.setVisible(true)
+  redraw()
+
+  while true do
+    local event = table.pack(os.pullEvent())
+
+    set.event(table.unpack(event, 1, event.n))
+    redraw()
+
+    if do_exit then
+      log_win.setVisible(false)
+      return relaunch
+    end
+  end
 end
 
 --- Run the client system.
@@ -759,7 +947,7 @@ local function run_server()
     right_bar = true,
     bar_color = colors.gray,
     highlight_bar_color = colors.lightGray,
-    callback = function() end
+    callback = display_logs
   }
 
   local function draw_server()
@@ -826,29 +1014,58 @@ local function run_server()
     set.draw()
   end
 
-  draw_server()
-  while true do
-    local event = table.pack(os.pullEvent())
+  parallel.waitForAny(
+    function()
+      -- UI thread
 
-    set.event(table.unpack(event, 1, event.n))
-    draw_server()
-  end
+      draw_server()
+      local timer = os.startTimer(1)
+      while true do
+        local event = table.pack(os.pullEvent())
+        set.event(table.unpack(event, 1, event.n))
+
+        if event[1] == "timer" and event[2] == timer then
+          timer = os.startTimer(1)
+        else
+          draw_server()
+        end
+      end
+    end,
+    function()
+      -- Audio/Radio thread
+
+
+    end
+  )
+
+  error("One of the main coroutines have stopped.", 0)
 end
 
-local ok, err = pcall(function()
-  if config.type == "client" then
-    main_context.debug "Running client."
-    run_client()
-  elseif config.type == "server" then
-    main_context.debug "Running server."
-    run_server()
-  else
-    error(("Unknown config type: %s"):format(config.type), 0)
-  end
-end)
+local relaunch_n = 0
+while true do
+  local ok, err = pcall(function()
+    if config.type == "client" then
+      main_context.debug "Running client."
+      run_client()
+    elseif config.type == "server" then
+      main_context.debug "Running server."
+      run_server()
+    else
+      error(("Unknown config type: %s"):format(config.type), 0)
+    end
+  end)
 
-if not ok then
-  main_context.error(err)
-  logging.dump_log(fs.combine(file_helper.working_directory, ".fatmusic_log_dump"))
-  error(err, 0)
+  if not ok then
+    main_context.error(err)
+    local relaunch = display_logs(err)
+
+    if relaunch then
+      relaunch_n = relaunch_n + 1
+      main_context.warn("Server relaunched after an error.\n  Relaunch count:", relaunch_n)
+    else
+      term.setBackgroundColor(colors.black)
+      term.setCursorPos(1, h)
+      error(err, 0)
+    end
+  end
 end
