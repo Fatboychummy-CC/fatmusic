@@ -8,6 +8,7 @@ local to_get = {
   "libs/file_helper.lua:file_helper.lua",
   "libs/logging.lua:logging.lua",
   "paste:libs/ecc.lua:ZGJGBJdg",
+  "extern:libs/aukit.lua:https://raw.githubusercontent.com/MCJack123/AUKit/master/aukit.lua",
   "extern:fatmusic.lua:https://raw.githubusercontent.com/Fatboychummy-CC/develop/main/fatmusic.lua",
 }
 local program_name = ""
