@@ -211,6 +211,125 @@ local function playlist_select(btn)
 
 end
 
+local function get_computer_type()
+  local level = "Basic"
+  local model = "computer"
+  if term.isColor() then
+    level = "Advanced"
+  end
+
+  if pocket then
+    model = "pocket computer"
+  elseif turtle then
+    model = "turtle"
+  end
+
+  return level .. " " .. model
+end
+
+local function yn(v, definitely)
+  return v and definitely and "Definitely." or v and "Yes." or "No."
+end
+
+--- Info collection function for dumping to logs - aids debugging. Only dumped if debug is enabled.
+local function collect_info()
+  local context = logging.create_context "DEBUG_INFO"
+
+  -- STAGE 1: COLLECT
+  local server_root = file_helper.working_directory
+  local file_named_fatmusic = shell.getRunningProgram() == fs.combine(file_helper.working_directory, "fatmusic.lua")
+  local libs_dir_found = fs.exists(fs.combine(file_helper.working_directory, "libs"))
+  local modded = false -- No check yet, I may not even add a system for modding.
+  local mods = {}
+
+  local libs = {
+    {"button.lua", "libs.button", false, false},
+    {"display_utils.lua", "libs.display_utils", false, false},
+    {"ecc.lua", "libs.ecc", false, false},
+    {"file_helper.lua", "libs.file_helper", false, false},
+    {"logging.lua", "libs.logging", false, false}
+  }
+  for i, lib_data in ipairs(libs) do
+    lib_data[3] = fs.exists(fs.combine(file_helper.working_directory, "libs", lib_data[1]))
+    local err
+    lib_data[4], err = pcall(require, lib_data[2])
+    if not lib_data[4] then
+      lib_data[5] = err
+    end
+  end
+
+  -- STAGE 2: WRITE
+  context.debug("#=====================================#")
+  context.debug("|Collecting information for debugging.|")
+  context.debug("#=====================================#")
+  context.debug("Is modified?", yn(modded, true))
+  if #mods > 0 then
+    context.debug("Mods:")
+    for _, mod in ipairs(mods) do
+      context.debug(' ', mod)
+    end
+  end
+  context.debug("Computer information:")
+  context.debug("  Computer type       :", get_computer_type())
+  context.debug("  _VERSION            :", _VERSION)
+  context.debug("  _HOST               :", _HOST)
+  context.debug("  _CC_DEFAULT_SETTINGS:", _CC_DEFAULT_SETTINGS)
+  context.debug("  On native term      :", yn(term.current() == term.native()))
+  context.debug("File system information:")
+  context.debug("  Server root:", "/" .. tostring(server_root) .. "/")
+  context.debug("  fatmusic.lua:", yn(file_named_fatmusic))
+  context.debug("  Found libs directory:", yn(libs_dir_found))
+  
+  for _, lib_data in ipairs(libs) do
+    context.debug("Library information for", lib_data[1])
+    context.debug("  Located :", lib_data[3])
+    context.debug("  Required:", lib_data[4], "(", lib_data[2], ")")
+    context.debug("  Errored :", lib_data[5] or "No.")
+  end
+
+  context.debug("Configuration settings:")
+  context.debug("  Type            :", config.type)
+  context.debug("  Log level       :", config.log_level)
+
+  if config.type == "client" then
+    context.debug("  Default server  :", config.default_server)
+    context.debug("  Server encrypted:", yn(config.server_enc_key))
+    context.debug("  Keepalive time  :", config.keepalive_timeout)
+  elseif config.type == "server" then
+    context.debug("  Server name     :", config.server_name)
+    context.debug("  Server encrypted:", yn(config.server_enc_key))
+    context.debug("  Max history len :", config.max_history)
+    context.debug("  Max playlist len:", config.max_playlist)
+    context.debug("  Radio on?       :", yn(config.broadcast_radio))
+    context.debug("  Keepalive ping  :", config.keepalive_ping_every)
+    context.debug("  Song info every :", config.broadcast_song_info_every)
+    context.debug("  Server hidden?  :", yn(config.server_hidden))
+    context.debug("  Server running? :", yn(config.server_running))
+  else
+    context.warn("Unknown system type selected:", config.type)
+  end
+
+  --[[
+    config.type = "client"
+    config.default_server = "None"
+    config.server_enc_key = ""
+    config.keepalive_timeout = 12
+    config.log_level = logging.LOG_LEVEL.DEBUG
+
+    config.type = "server"
+    config.server_name = "New FatMusic Server"
+    config.server_enc_key = ""
+    config.max_history = 20
+    config.max_playlist = 100
+    config.broadcast_radio = false
+    config.keepalive_ping_every = 5
+    config.broadcast_song_info_every = 5
+    config.server_hidden = false
+    config.server_running = false
+    config.log_level = logging.LOG_LEVEL.DEBUG
+  ]]
+end
+
 local function dump_logs()
   if fs.exists(FILES.DUMP_FILE) then
     local set = button.set()
@@ -218,9 +337,9 @@ local function dump_logs()
     local continue = false
     local clicked = false
     local no = set.new {
-      x = pocket and 10 or 32,
+      x = pocket and 18 or 34,
       y = 12,
-      w = 6,
+      w = 4,
       h = 3,
       text = "NO",
       bg_color = colors.lightGray,
@@ -240,7 +359,7 @@ local function dump_logs()
     }
 
     local yes = set.new {
-      x = pocket and 5 or 15,
+      x = pocket and 6 or 15,
       y = 12,
       w = 5,
       h = 3,
@@ -264,20 +383,39 @@ local function dump_logs()
 
     local function redraw()
       display_utils.fast_box(
-        math.ceil(w / 2 - 13), -- pocket and 3 or 13
-        math.ceil(h / 2 - 6), -- 4
-        27, -- pocket and 20 or 27
-        13, -- 13
+        pocket and 4 or 13,
+        4,
+        pocket and 20 or 27,
+        13,
         colors.gray
       )
       display_utils.fast_box(
-        math.ceil(w / 2 - 12),-- pocket and 4 or 14
-        math.ceil(h / 2 - 5), -- 5
-        25, -- pocket and 18 or 25
+        pocket and 5 or 14,
+        5,
+        pocket and 18 or 25,
         11,
         colors.white
       )
       set.draw()
+
+      if pocket then
+        term.setBackgroundColor(colors.white)
+        term.setTextColor(colors.black)
+        term.setCursorPos(6, 6)
+        term.write("File already")
+        term.setCursorPos(6, 7)
+        term.write("exists.")
+
+        term.setCursorPos(6, 9)
+        term.write("Overwrite?")
+      else
+        term.setTextColor(colors.black)
+        term.setBackgroundColor(colors.white)
+        term.setCursorPos(15, 6)
+        term.write("File already exists.")
+        term.setCursorPos(15, 8)
+        term.write("Overwrite?")
+      end
     end
 
     while true do
@@ -288,6 +426,7 @@ local function dump_logs()
       if clicked then
         if continue then
           main_context.debug("Dumping log to", FILES.DUMP_FILE)
+          collect_info()
           logging.dump_log(FILES.DUMP_FILE)
         end
         return
@@ -308,7 +447,7 @@ local function display_logs(err)
   local relaunch = false
   local exit_button = set.new {
     x = w - 7,
-    y = 16,
+    y = pocket and 17 or 16,
     w = 6,
     h = 3,
     text = "EXIT",
@@ -356,7 +495,7 @@ local function display_logs(err)
 
   local dump_button = set.new {
     x = 2,
-    y = 16,
+    y = pocket and 17 or 16,
     w = 11,
     h = 3,
     text = "DUMP LOGS",
@@ -379,12 +518,12 @@ local function display_logs(err)
     term.clear()
     log_win.redraw()
     set.draw()
-    display_utils.fast_box(1, 14, w, 1, colors.gray)
+    display_utils.fast_box(1, pocket and 15 or 14, w, 1, colors.gray)
     term.setBackgroundColor(colors.gray)
     term.setTextColor(colors.white)
-    term.setCursorPos(1, 14)
+    term.setCursorPos(1, pocket and 15 or 14)
     if type(err) == "string" then
-      term.write("System errored, viewing logs.")
+      term.write(pocket and "System error, viewing logs" or "System errored, viewing logs.")
     else
       term.write("Viewing logs.")
     end
