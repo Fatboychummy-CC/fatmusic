@@ -11,7 +11,7 @@ local to_get = {
   "extern:libs/aukit.lua:https://raw.githubusercontent.com/MCJack123/AUKit/master/aukit.lua",
   "extern:fatmusic.lua:https://raw.githubusercontent.com/Fatboychummy-CC/develop/main/fatmusic.lua",
 }
-local program_name = ""
+local program_name = "Fatmusic"
 
 -- #########################################
 
