@@ -113,7 +113,7 @@ local function setup_client()
   config.type = "client"
   config.default_server = "None"
   config.server_enc_key = ""
-  config.keepalive_timeout = 12
+  config.data_timeout = 12
   config.log_level = logging.LOG_LEVEL.DEBUG
 
   setup_complete()
@@ -141,10 +141,9 @@ local function setup_server()
   config.server_name = "New FatMusic Server"
   config.server_enc_key = ""
   config.max_history = 20
-  config.max_playlist = 100
+  config.max_playlist = 9999
   config.broadcast_radio = false
-  config.keepalive_ping_every = 5
-  config.broadcast_song_info_every = 5
+  config.data_ping_every = 5
   config.server_hidden = false
   config.server_running = false
   config.log_level = logging.LOG_LEVEL.DEBUG
@@ -186,10 +185,6 @@ end
 
 local function client_settings()
 
-end
-
-local function server_settings()
-  
 end
 
 --- Open the "server" menu in the client.
@@ -298,15 +293,14 @@ local function collect_info()
   if config.type == "client" then
     context.debug("  Default server  :", config.default_server)
     context.debug("  Server encrypted:", yn(config.server_enc_key))
-    context.debug("  Keepalive time  :", config.keepalive_timeout)
+    context.debug("  Data timeout  :", config.data_timeout)
   elseif config.type == "server" then
     context.debug("  Server name     :", config.server_name)
-    context.debug("  Server encrypted:", yn(config.server_enc_key))
+    context.debug("  Server encrypted:", config.server_enc_key == "" and "No." or "Yes.")
     context.debug("  Max history len :", config.max_history)
     context.debug("  Max playlist len:", config.max_playlist)
     context.debug("  Radio on?       :", yn(config.broadcast_radio))
-    context.debug("  Keepalive ping  :", config.keepalive_ping_every)
-    context.debug("  Song info every :", config.broadcast_song_info_every)
+    context.debug("  Data ping rate  :", config.data_ping_every)
     context.debug("  Server hidden?  :", yn(config.server_hidden))
     context.debug("  Server running? :", yn(config.server_running))
   else
@@ -980,6 +974,164 @@ local function run_client()
   end
 end
 
+local function server_settings(data)
+  local set = button.set()
+
+  local go_back = false
+
+  local back_button = set.new {
+    x = 3,
+    y = 15,
+    w = 6,
+    h = 3,
+    text = "BACK",
+    bg_color = colors.lightGray,
+    txt_color = colors.black,
+    highlight_bg_color = colors.white,
+    highlight_txt_color = colors.black,
+    text_centered = true,
+    top_bar = true,
+    bottom_bar = true,
+    left_bar = true,
+    right_bar = true,
+    bar_color = colors.gray,
+    highlight_bar_color = colors.lightGray,
+    callback = function()
+      go_back = true
+    end
+  }
+
+  local server_name_button = set.new {
+    x = 17,
+    y = 4,
+    w = 15,
+    h = 1,
+    text = config.server_name,
+    bg_color = colors.lightGray,
+    highlight_bg_color = colors.white,
+    txt_color = colors.black,
+    highlight_txt_color = colors.black,
+    callback = function()
+      -- ...?
+    end
+  }
+
+  local server_hidden_button = set.new {
+    x = 48,
+    y = 4,
+    w = 1,
+    h = 1,
+    text = config.server_hidden and "Y" or "N",
+    bg_color = config.server_hidden and colors.green or colors.red,
+    highlight_bg_color = config.server_hidden and colors.yellow or colors.orange,
+    txt_color = colors.white,
+    highlight_txt_color = colors.white,
+    callback = function(self)
+      config.server_hidden = not config.server_hidden
+
+      self.text = config.server_hidden and "Y" or "N"
+      self.bg_color = config.server_hidden and colors.green or colors.red
+      self.highlight_bg_color = config.server_hidden and colors.yellow or colors.orange
+    end
+  }
+
+  local encryption_button = set.new {
+    x = 20,
+    y = 6,
+    w = 15,
+    h = 1,
+    text = ("\x07"):rep(15),
+    bg_color = colors.lightGray,
+    highlight_bg_color = colors.white,
+    txt_color = colors.black,
+    highlight_txt_color = colors.black,
+    callback = function()
+      -- ...?
+    end
+  }
+
+  local playlist_length_button = set.new {
+    x = 25,
+    y = 8,
+    w = 4,
+    h = 1,
+    text = ("%4d"):format(config.max_playlist),
+    bg_color = colors.lightGray,
+    highlight_bg_color = colors.white,
+    txt_color = colors.black,
+    highlight_txt_color = colors.black,
+    callback = function()
+      -- ...?
+    end,
+  }
+
+  local broadcast_rate_button = set.new {
+    x = 46,
+    y = 8,
+    w = 2,
+    h = 1,
+    text = ("%2d"):format(config.data_ping_every),
+    bg_color = colors.lightGray,
+    highlight_bg_color = colors.white,
+    txt_color = colors.black,
+    highlight_txt_color = colors.black,
+    callback = function()
+      -- ...?
+    end
+  }
+
+  local log_level_button = set.new {
+    x = 19,
+    y = 10,
+    w = 1,
+    h = 1,
+    text = ("%1d"):format(config.log_level),
+    bg_color = colors.lightGray,
+    highlight_bg_color = colors.white,
+    txt_color = colors.black,
+    highlight_txt_color = colors.black,
+    callback = function(self)
+      config.log_level = (config.log_level + 1) % 4
+      logging.set_level(config.log_level)
+      self.text = ("%1d"):format(config.log_level)
+    end
+  }
+
+  local function redraw()
+    term.setBackgroundColor(colors.black)
+    term.clear()
+
+    -- Main box
+    display_utils.fast_box(3, 3, w - 4, 11, colors.gray)
+    
+    term.setBackgroundColor(colors.gray)
+    term.setTextColor(colors.white)
+
+    term.setCursorPos(4, 4) term.write("Server name:")
+    term.setCursorPos(33, 4) term.write("Server hidden:")
+    term.setCursorPos(4, 6) term.write("Encryption key:")
+    term.setCursorPos(4, 8) term.write("Max playlist length:")
+    term.setCursorPos(30, 8) term.write("Broadcast rate:")
+    term.setCursorPos(4, 10) term.write("Logging level:")
+
+    -- Information box.
+    display_utils.fast_box(10, 15, 40, 3, colors.gray)
+
+    set.draw()
+  end
+
+  while true do
+    redraw()
+    local event = table.pack(os.pullEvent())
+
+    set.event(table.unpack(event, 1, event.n))
+
+    if go_back then
+      return
+    end
+  end
+end
+
 local function run_server()
   local set = button.set()
 
@@ -1136,7 +1288,7 @@ local function run_server()
     -- Current song
     term.setCursorPos(4, 10)
     term.write(("Current song   : %20s"):format(
-      server_data.playing and server_data.song_queue[server_data.song_queue.position] and server_data.song_queue[server_data.song_queue.position].name
+      server_data.song_queue[server_data.song_queue.position] and server_data.song_queue[server_data.song_queue.position].name
       or "None"
     ))
 
@@ -1343,6 +1495,10 @@ local function run_server()
             elseif message.action == "skip" then
               os.queueEvent "fatmusic:stop"
               remote_context.debug "Current song stopped, should skip to next automatically."
+            elseif message.action == "skip_to" then
+              server_data.song_queue.position = math.min(#server_data.song_queue, message.data - 1)
+              os.queueEvent "fatmusic:stop"
+              remote_context.debug(("Skipped to queue position %d."):format(message.data))
             elseif message.action == "song" then
               remote_context.debug "Message is table!"
               remote_context.debug(textutils.serialize(message.song, {compact=true}))
@@ -1355,7 +1511,7 @@ local function run_server()
     function()
       -- Remote broadcast thread.
 
-      local function clean_keepalive()
+      local function clean_data()
         local t = {song_queue = {position = server_data.song_queue.position}}
 
         for i, song_data in ipairs(server_data.song_queue) do
@@ -1377,13 +1533,13 @@ local function run_server()
       end
 
       while true do
-        sleep(config.keepalive_ping_every)
+        sleep(config.data_ping_every)
         
         if broadcast_state() then
           rednet.broadcast(
             {
-              action = "keepalive",
-              data = clean_keepalive()
+              action = "data",
+              data = clean_data()
             },
             "fatmusic"
           )
