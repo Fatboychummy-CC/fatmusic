@@ -1,11 +1,15 @@
 --- The main program for fatmusic. This will setup as either a server or remote.
 --- This will also DOWNLOAD any required libraries.
 
+-- TEMPORARY
+rednet.open("back")
+
 local file_helper = require "libs.file_helper"
 local display_utils = require "libs.display_utils"
 local button = require "libs.button"
 local ecc = require "libs.ecc"
 local logging = require "libs.logging"
+local aukit = require "libs.aukit"
 
 local main_context = logging.create_context "Main"
 local w, h = term.getSize()
@@ -185,7 +189,7 @@ local function client_settings()
 end
 
 local function server_settings()
-  error("omg array index out of bounds or something lolololololol")
+  
 end
 
 --- Open the "server" menu in the client.
@@ -308,26 +312,6 @@ local function collect_info()
   else
     context.warn("Unknown system type selected:", config.type)
   end
-
-  --[[
-    config.type = "client"
-    config.default_server = "None"
-    config.server_enc_key = ""
-    config.keepalive_timeout = 12
-    config.log_level = logging.LOG_LEVEL.DEBUG
-
-    config.type = "server"
-    config.server_name = "New FatMusic Server"
-    config.server_enc_key = ""
-    config.max_history = 20
-    config.max_playlist = 100
-    config.broadcast_radio = false
-    config.keepalive_ping_every = 5
-    config.broadcast_song_info_every = 5
-    config.server_hidden = false
-    config.server_running = false
-    config.log_level = logging.LOG_LEVEL.DEBUG
-  ]]
 end
 
 local function dump_logs()
@@ -516,7 +500,8 @@ local function display_logs(err)
   local function redraw()
     term.setBackgroundColor(colors.black)
     term.clear()
-    log_win.redraw()
+    log_win.setVisible(true)
+    log_win.setVisible(false)
     set.draw()
     display_utils.fast_box(1, pocket and 15 or 14, w, 1, colors.gray)
     term.setBackgroundColor(colors.gray)
@@ -528,8 +513,6 @@ local function display_logs(err)
       term.write("Viewing logs.")
     end
   end
-
-  log_win.setVisible(true)
   redraw()
 
   while true do
@@ -1004,8 +987,17 @@ local function run_server()
     song_queue = {
       position = 0,
     },
+    state = "startup", ---@type server_state
+    broadcast_state = config.server_hidden and "offline" or "ignore", ---@type server_broadcast_state
     playing = false
   }
+
+  --- Check if the server is in a state which allows it to broadcast data or respond to pings.
+  ---@return boolean
+  local function broadcast_state()
+    return server_data.broadcast_state == "online"
+      or server_data.broadcast_state == "ignore"
+  end
 
   local config_button = set.new {
     x = 3,
@@ -1046,6 +1038,11 @@ local function run_server()
     highlight_bar_color = colors.white,
     callback = function()
       config.server_running = not config.server_running
+      if config.server_running then
+        server_data.broadcast_state = config.server_hidden and "offline" or "online"
+      else
+        server_data.broadcast_state = config.server_hidden and "offline" or "ignore"
+      end
     end
   }
 
@@ -1066,7 +1063,11 @@ local function run_server()
     right_bar = true,
     bar_color = colors.orange,
     highlight_bar_color = colors.yellow,
-    callback = function() end
+    callback = function()
+      server_data.playing = false
+      server_data.song_queue = {position = 0}
+      os.queueEvent "fatmusic:stop"
+    end
   }
 
   local logs_button = set.new {
@@ -1089,6 +1090,7 @@ local function run_server()
     callback = display_logs
   }
 
+  local draw_context = logging.create_context "DRAW"
   local function draw_server()
     term.setBackgroundColor(colors.black)
     term.clear()
@@ -1134,15 +1136,14 @@ local function run_server()
     -- Current song
     term.setCursorPos(4, 10)
     term.write(("Current song   : %20s"):format(
-      server_data.playing and server_data.song_queue[server_data.song_queue.position].name
+      server_data.playing and server_data.song_queue[server_data.song_queue.position] and server_data.song_queue[server_data.song_queue.position].name
       or "None"
     ))
 
     -- playlist length
     term.setCursorPos(4, 11)
     term.write(("Playlist length: %20d"):format(
-      server_data.playing and #server_data.song_queue - server_data.song_queue.position + 1
-      or 0
+      #server_data.song_queue
     ))
 
     -- playing
@@ -1151,6 +1152,125 @@ local function run_server()
 
     -- draw all the buttons.
     set.draw()
+  end
+
+  local song_context = logging.create_context "MUSIC_CONTROL"
+  local function get_next_song()
+    server_data.song_queue.position = server_data.song_queue.position + 1
+    song_context.debug "Increment song queue position"
+    song_context.debug(server_data.song_queue.position - 1, "->", server_data.song_queue.position)
+    local song = server_data.song_queue[server_data.song_queue.position]
+    if song then
+      song_context.debug "Got song at position!"
+      return song
+    else
+      song_context.debug "No song at that queue position."
+      server_data.song_queue.position = server_data.song_queue.position - 1
+    end
+  end
+
+  local audio_context = logging.create_context "AUDIO"
+
+  --- Download the given song.
+  ---@param song song_info The information about the song.
+  ---@return string|false song_data The song data, or false if it failed to download.
+  ---@return string? error The error, if there was one.
+  local function download_song(song)
+    local handle, err = http.get(song.remote, nil, true)
+    if not handle then
+      return false, err
+    end
+
+    local data = handle.readAll() --[[@as string]]
+    handle.close()
+
+    return data
+  end
+
+  --- Load the song given its song info and downloaded data.
+  ---@param song song_info The song's information.
+  ---@param data string The song data, downloaded from the internets.
+  ---@return aukit_stream|false stream The stream iterator.
+  ---@return number|string length_or_error The song length, in seconds. Returns the reason if it failed to load the song.
+  local function load_song(song, data)
+    if song.file_type == "pcm" then
+      return aukit.stream.pcm(
+        data,
+        song.audio_options.bit_depth,
+        song.audio_options.data_type,
+        song.audio_options.channels,
+        song.audio_options.sample_rate,
+        song.audio_options.big_endian,
+        song.audio_options.mono
+      )
+    elseif song.file_type == "dfpwm" then
+      return aukit.stream.dfpwm(
+        data,
+        song.audio_options.sample_rate,
+        song.audio_options.channels,
+        song.audio_options.mono
+      )
+    elseif song.file_type == "wav" or song.file_type == "aiff" or song.file_type == "au" then
+      return aukit.stream[song.file_type](
+        data,
+        song.audio_options.mono,
+        song.audio_options.ignore_header
+      )
+    elseif song.file_type == "flac" then
+      return aukit.stream.flac(
+        data,
+        song.audio_options.mono
+      )
+    end
+
+    return false, ("Unsupported file type: %s"):format(song.file_type)
+  end
+
+
+  local blank = {{}}
+  for i = 1, 48000 do blank[1][i] = 0 end
+  --- Play audio from a given song while simultaneously preloading the given song.
+  ---@param song_data song_info The song data, if have both.
+  local function play_audio(song_data)
+    server_data.state = "loading"
+    local function play(the_song)
+      parallel.waitForAny(
+        function()
+          -- Play the music.
+          server_data.state = "playing"
+          aukit.play(the_song, function(pos)
+            while not server_data.playing do
+              server_data.state = "paused"
+              sleep(1)
+            end
+            server_data.state = "playing"
+            song_data.current_position = pos
+          end, 1, peripheral.find "speaker")
+        end,
+        function()
+          -- if stop event received, stop the music playback.
+          os.pullEvent "fatmusic:stop"
+        end
+      )
+
+      server_data.state = "waiting"
+    end
+
+    -- Audio is not loaded. Load it then play it.
+    local data, err = download_song(song_data)
+    if data then
+      local loaded, len = load_song(song_data, data)
+      if loaded then
+        ---@cast len integer
+
+        song_data.length = len
+        play(loaded)
+        return
+      end
+
+      audio_context.error("Failed to load", song_data.name, ":", len)
+    end
+    audio_context.error("Failed to download", song_data.name, ":", err)
   end
 
   parallel.waitForAny(
@@ -1172,12 +1292,107 @@ local function run_server()
     end,
     function()
       -- Audio/Radio thread
+      local player_context = logging.create_context "PLAYER"
 
+      while true do
+        if server_data.playing then
+          local song = get_next_song()
+          player_context.debug "Player tick."
 
+          if song then
+            server_data.state = "loading"
+            player_context.debug "Song exists."
+            play_audio(song)
+            server_data.state = "waiting"
+          else
+            server_data.playing = false
+            server_data.song_queue.position = 0
+          end
+        else
+          server_data.state = "stopped"
+        end
+
+        sleep(1)
+      end
+    end,
+    function()
+      -- Remote receiver thread.
+      local remote_context = logging.create_context "REMOTE"
+
+      while true do
+        local sender, message = rednet.receive("fatmusic")
+        remote_context.debug "Received message."
+        remote_context.debug("Server running:", config.server_running, "State:", server_data.broadcast_state)
+        if config.server_running and server_data.broadcast_state == "online" then
+          if type(message) == "table" then
+            if message.action == "play" then
+              server_data.playing = true
+              remote_context.debug "Music resumed."
+            elseif message.action == "pause" then
+              server_data.playing = false
+              remote_context.debug "Music paused."
+            elseif message.action == "stop" then
+              server_data.playing = false
+              os.queueEvent "fatmusic:stop"
+              server_data.song_queue.position = math.max(server_data.song_queue.position - 1, 0)
+              remote_context.debug "Music stopped."
+            elseif message.action == "back" then
+              os.queueEvent "fatmusic:stop"
+              server_data.song_queue.position = math.max(server_data.song_queue.position - 2, 0)
+              remote_context.debug "Music rewinded."
+            elseif message.action == "skip" then
+              os.queueEvent "fatmusic:stop"
+              remote_context.debug "Current song stopped, should skip to next automatically."
+            elseif message.action == "song" then
+              remote_context.debug "Message is table!"
+              remote_context.debug(textutils.serialize(message.song, {compact=true}))
+              table.insert(server_data.song_queue, message.song)
+            end
+          end
+        end
+      end
+    end,
+    function()
+      -- Remote broadcast thread.
+
+      local function clean_keepalive()
+        local t = {song_queue = {position = server_data.song_queue.position}}
+
+        for i, song_data in ipairs(server_data.song_queue) do
+          ---@diagnostic disable-next-line WHY THE FUCK DO YOU THINK IT'S AN INTEGER??????????
+          ---@cast song_data song_info
+
+          t.song_queue[i] = {
+            artist = song_data.artist,
+            current_position = song_data.current_position,
+            length = song_data.length,
+            genre = song_data.genre,
+            name = song_data.name
+          }
+        end
+
+        t.playing = server_data.playing
+        t.state = server_data.state
+        return t
+      end
+
+      while true do
+        sleep(config.keepalive_ping_every)
+        
+        if broadcast_state() then
+          rednet.broadcast(
+            {
+              action = "keepalive",
+              data = clean_keepalive()
+            },
+            "fatmusic"
+          )
+        end
+      end
     end
   )
 
-  error("One of the main coroutines have stopped.", 0)
+  error("One of the main coroutines have stopped. No error was raised.", 0)
 end
 
 local relaunch_n = 0

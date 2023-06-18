@@ -65,3 +65,18 @@
 ---| '"signed"'
 ---| '"unsigned"'
 ---| '"float"' # Requires 32 bit depth!
+
+---@alias aukit_stream fun():{[integer]:{[integer]:number}} The iterator function that returns chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as the current position of the audio in seconds.
+
+---@alias server_state
+---| '"startup"' # Server is starting up and not ready yet.
+---| '"playing"' # Server is playing a song.
+---| '"paused"' # Server has paused the current song.
+---| '"loading"' # Server is loading a new song.
+---| '"stopped"' # Server is online but no song is playing.
+---| '"waiting"' # Server just finished playing a song and is waiting to start another one. Similar to stopped, but the server will still play new songs added to its queue.
+
+---@alias server_broadcast_state
+---| '"online"' # Server is online and accepting inputs.
+---| '"ignore"' # Server is not accepting inputs, but is running.
+---| '"offline"' # Server is offline and should not broadcast status. Only used if `config.server_hidden` is enabled.
