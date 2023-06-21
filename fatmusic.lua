@@ -140,6 +140,7 @@ local function setup_server()
   config.type = "server"
   config.server_name = "New FatMusic Server"
   config.server_enc_key = ""
+  config.master_password = ""
   config.max_history = 20
   config.max_playlist = 9999
   config.broadcast_radio = false
@@ -974,6 +975,10 @@ local function run_client()
   end
 end
 
+local function save_config()
+  file_helper.serialize(FILES.CONFIG, config)
+end
+
 local function server_settings(data)
   local set = button.set()
 
@@ -1001,19 +1006,31 @@ local function server_settings(data)
     end
   }
 
-  local server_name_button = set.new {
+  local server_name_button = set.input_box {
     x = 17,
     y = 4,
     w = 15,
-    h = 1,
     text = config.server_name,
     bg_color = colors.lightGray,
     highlight_bg_color = colors.white,
     txt_color = colors.black,
     highlight_txt_color = colors.black,
-    callback = function()
-      -- ...?
-    end
+    callback = function(self)
+      config.server_name = self.result
+      self.default_text = self.result
+      self.text = self.result
+    end,
+    verification_callback = function(str)
+      return #str <= 16 and str or nil, "Name must be less than 16 characters long."
+    end,
+    info_x = 3,
+    info_y = 15,
+    info_w = 47,
+    info_h = 3,
+    info_bg_color = colors.gray,
+    info_txt_color = colors.white,
+    info_text = "Set the name of the server. Allows clients to differentiate servers.",
+    default_text = config.server_name
   }
 
   local server_hidden_button = set.new {
@@ -1035,49 +1052,127 @@ local function server_settings(data)
     end
   }
 
-  local encryption_button = set.new {
+  local function verify_password(str)
+    if str == "" then return "" end -- allow empty input
+    -- Apparently no character class exists that pulls all "special" characters.
+    -- Thus, we will test for these and any control characters, punctuation characters, and \0
+    -- I do not care if this string overlaps with any of those.
+    local specials = ("`~!@#$%^&*()_+-=[]\\;',./{}|:\"<>?")
+
+    local has_specials, has_digits, has_lower, has_upper = false, false, false, false
+
+    if str:match("%p") or str:match("%c") or str:match("%z") or str:match("%s") then
+      has_specials = true
+    else
+      for char in specials:gmatch(".") do
+        if str:find(char, 1, true) then
+          has_specials = true
+          break
+        end
+      end
+    end
+
+    has_digits = str:match("%d") and true or false
+    has_lower = str:match("%l") and true or false
+    has_upper = str:match("%u") and true or false
+
+    return has_specials and has_digits and has_lower and has_upper and #str >= 8 and str or nil,
+      "Requires one special character, digit, lowercase, and uppercase number. Min 8 chars."
+  end
+
+  local encryption_button = set.input_box {
     x = 20,
     y = 6,
-    w = 15,
-    h = 1,
-    text = ("\x07"):rep(15),
+    w = 10,
+    text = config.server_enc_key == "" and "None" or ("\x07"):rep(10),
     bg_color = colors.lightGray,
     highlight_bg_color = colors.white,
     txt_color = colors.black,
     highlight_txt_color = colors.black,
-    callback = function()
-      -- ...?
-    end
+    callback = function(self)
+      config.server_enc_key = self.result
+      self.text = config.server_enc_key == "" and "None" or ("\x07"):rep(10)
+    end,
+    verification_callback = verify_password,
+    info_x = 3,
+    info_y = 15,
+    info_w = 47,
+    info_h = 3,
+    info_bg_color = colors.gray,
+    info_txt_color = colors.white,
+    info_text = "Set the encryption key of the server. Leave blank for empty.",
+    password_field = true
   }
 
-  local playlist_length_button = set.new {
+  local playlist_length_button = set.input_box {
     x = 25,
     y = 8,
     w = 4,
-    h = 1,
     text = ("%4d"):format(config.max_playlist),
     bg_color = colors.lightGray,
     highlight_bg_color = colors.white,
     txt_color = colors.black,
     highlight_txt_color = colors.black,
-    callback = function()
-      -- ...?
+    callback = function(self)
+      config.max_playlist = self.result
+      self.text = ("%4d"):format(config.max_playlist)
+      self.default_text = tostring(self.result)
     end,
+    verification_callback = function(str)
+      local v = tonumber(str)
+      if v then
+        if v >= 1 and v <= 9999 then
+          return v
+        end
+
+        return nil, "Input must be between 1 and 9999 (inclusive)."
+      else
+        return nil, "Input must be a number."
+      end
+    end,
+    info_x = 3,
+    info_y = 15,
+    info_w = 47,
+    info_h = 3,
+    info_bg_color = colors.gray,
+    info_txt_color = colors.white,
+    info_text = "Set the maximum playlist length of the server.",
+    default_text = tostring(config.max_playlist)
   }
 
-  local broadcast_rate_button = set.new {
+  local broadcast_rate_button = set.input_box {
     x = 46,
     y = 8,
     w = 2,
-    h = 1,
     text = ("%2d"):format(config.data_ping_every),
     bg_color = colors.lightGray,
     highlight_bg_color = colors.white,
     txt_color = colors.black,
     highlight_txt_color = colors.black,
-    callback = function()
-      -- ...?
-    end
+    callback = function(self)
+      config.data_ping_every = self.result
+      self.text = ("%2d"):format(self.result)
+      self.default_text = tostring(self.result)
+    end,
+    verification_callback = function(str)
+      local v = tonumber(str)
+      if v then
+        if v >= 1 and v <= 99 then
+          return v
+        end
+
+        return nil, "Input must be between 1 and 99 (inclusive)."
+      else
+        return nil, "Input must be a number."
+      end
+    end,
+    info_x = 3,
+    info_y = 15,
+    info_w = 47,
+    info_h = 3,
+    info_bg_color = colors.gray,
+    info_txt_color = colors.white,
+    info_text = "Set the rate at which the server broadcasts song information (seconds/broadcast)."
   }
 
   local log_level_button = set.new {
@@ -1097,13 +1192,37 @@ local function server_settings(data)
     end
   }
 
+  local master_password_button = set.input_box {
+    x = 21,
+    y = 12,
+    w = 10,
+    text = config.master_password == "" and "None" or ("\x07"):rep(10),
+    bg_color = colors.lightGray,
+    highlight_bg_color = colors.white,
+    txt_color = colors.black,
+    highlight_txt_color = colors.black,
+    callback = function(self)
+      config.master_password = self.result
+      self.text = config.master_password == "" and "None" or ("\x07"):rep(10)
+    end,
+    verification_callback = verify_password,
+    info_x = 3,
+    info_y = 15,
+    info_w = 47,
+    info_h = 3,
+    info_bg_color = colors.gray,
+    info_txt_color = colors.white,
+    info_text = "Set the master password for the server. Leave blank to clear.",
+    password_field = true
+  }
+
   local function redraw()
     term.setBackgroundColor(colors.black)
     term.clear()
 
     -- Main box
     display_utils.fast_box(3, 3, w - 4, 11, colors.gray)
-    
+
     term.setBackgroundColor(colors.gray)
     term.setTextColor(colors.white)
 
@@ -1113,9 +1232,7 @@ local function server_settings(data)
     term.setCursorPos(4, 8) term.write("Max playlist length:")
     term.setCursorPos(30, 8) term.write("Broadcast rate:")
     term.setCursorPos(4, 10) term.write("Logging level:")
-
-    -- Information box.
-    display_utils.fast_box(10, 15, 40, 3, colors.gray)
+    term.setCursorPos(4, 12) term.write("Master password:")
 
     set.draw()
   end
@@ -1124,7 +1241,9 @@ local function server_settings(data)
     redraw()
     local event = table.pack(os.pullEvent())
 
-    set.event(table.unpack(event, 1, event.n))
+    if set.event(table.unpack(event, 1, event.n)) then
+      save_config()
+    end
 
     if go_back then
       return
