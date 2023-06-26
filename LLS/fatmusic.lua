@@ -80,3 +80,18 @@
 ---| '"online"' # Server is online and accepting inputs.
 ---| '"ignore"' # Server is not accepting inputs, but is running.
 ---| '"offline"' # Server is offline and should not broadcast status. Only used if `config.server_hidden` is enabled.
+
+---@alias server_action
+---| '"play"' # Start the music (or resume the music if paused).
+---| '"pause"' # Pause the music.
+---| '"stop"' # Stop the music.
+---| '"skip"' # Go to the next song.
+---| '"skip_to"' # Skip to a specific song in the queue.
+---| '"back"' # Go back a song.
+---| '"song"' # Request to queue another song.
+---| '"playlist"' # Request to queue an entire playlist worth of songs.
+---| '"loop"' # Enable or disable looping the current playlist.
+---| '"randomize"' # Toggle playing the queue randomly.
+
+---@class server_message
+---@field action server_action The action to take.

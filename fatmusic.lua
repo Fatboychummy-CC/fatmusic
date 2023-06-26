@@ -243,11 +243,11 @@ local function collect_info()
   local mods = {}
 
   local libs = {
-    {"button.lua", "libs.button", false, false},
-    {"display_utils.lua", "libs.display_utils", false, false},
-    {"ecc.lua", "libs.ecc", false, false},
-    {"file_helper.lua", "libs.file_helper", false, false},
-    {"logging.lua", "libs.logging", false, false}
+    { "button.lua",        "libs.button",        false, false },
+    { "display_utils.lua", "libs.display_utils", false, false },
+    { "ecc.lua",           "libs.ecc",           false, false },
+    { "file_helper.lua",   "libs.file_helper",   false, false },
+    { "logging.lua",       "libs.logging",       false, false }
   }
   for i, lib_data in ipairs(libs) do
     lib_data[3] = fs.exists(fs.combine(file_helper.working_directory, "libs", lib_data[1]))
@@ -279,7 +279,7 @@ local function collect_info()
   context.debug("  Server root:", "/" .. tostring(server_root) .. "/")
   context.debug("  fatmusic.lua:", yn(file_named_fatmusic))
   context.debug("  Found libs directory:", yn(libs_dir_found))
-  
+
   for _, lib_data in ipairs(libs) do
     context.debug("Library information for", lib_data[1])
     context.debug("  Located :", lib_data[3])
@@ -1077,7 +1077,7 @@ local function server_settings(data)
     has_upper = str:match("%u") and true or false
 
     return has_specials and has_digits and has_lower and has_upper and #str >= 8 and str or nil,
-      "Requires one special character, digit, lowercase, and uppercase number. Min 8 chars."
+        "Requires one special character, digit, lowercase, and uppercase number. Min 8 chars."
   end
 
   local encryption_button = set.input_box {
@@ -1226,13 +1226,20 @@ local function server_settings(data)
     term.setBackgroundColor(colors.gray)
     term.setTextColor(colors.white)
 
-    term.setCursorPos(4, 4) term.write("Server name:")
-    term.setCursorPos(33, 4) term.write("Server hidden:")
-    term.setCursorPos(4, 6) term.write("Encryption key:")
-    term.setCursorPos(4, 8) term.write("Max playlist length:")
-    term.setCursorPos(30, 8) term.write("Broadcast rate:")
-    term.setCursorPos(4, 10) term.write("Logging level:")
-    term.setCursorPos(4, 12) term.write("Master password:")
+    term.setCursorPos(4, 4)
+    term.write("Server name:")
+    term.setCursorPos(33, 4)
+    term.write("Server hidden:")
+    term.setCursorPos(4, 6)
+    term.write("Encryption key:")
+    term.setCursorPos(4, 8)
+    term.write("Max playlist length:")
+    term.setCursorPos(30, 8)
+    term.write("Broadcast rate:")
+    term.setCursorPos(4, 10)
+    term.write("Logging level:")
+    term.setCursorPos(4, 12)
+    term.write("Master password:")
 
     set.draw()
   end
@@ -1267,7 +1274,7 @@ local function run_server()
   ---@return boolean
   local function broadcast_state()
     return server_data.broadcast_state == "online"
-      or server_data.broadcast_state == "ignore"
+        or server_data.broadcast_state == "ignore"
   end
 
   local config_button = set.new {
@@ -1336,7 +1343,7 @@ local function run_server()
     highlight_bar_color = colors.yellow,
     callback = function()
       server_data.playing = false
-      server_data.song_queue = {position = 0}
+      server_data.song_queue = { position = 0 }
       os.queueEvent "fatmusic:stop"
     end
   }
@@ -1407,7 +1414,8 @@ local function run_server()
     -- Current song
     term.setCursorPos(4, 10)
     term.write(("Current song   : %20s"):format(
-      server_data.song_queue[server_data.song_queue.position] and server_data.song_queue[server_data.song_queue.position].name
+      server_data.song_queue[server_data.song_queue.position] and
+      server_data.song_queue[server_data.song_queue.position].name
       or "None"
     ))
 
@@ -1498,7 +1506,7 @@ local function run_server()
   end
 
 
-  local blank = {{}}
+  local blank = { {} }
   for i = 1, 48000 do blank[1][i] = 0 end
   --- Play audio from a given song while simultaneously preloading the given song.
   ---@param song_data song_info The song data, if have both.
@@ -1590,38 +1598,72 @@ local function run_server()
       -- Remote receiver thread.
       local remote_context = logging.create_context "REMOTE"
 
+      ---@type table<string, fun(request:server_message):table?> No return means to assume status 200.
+      local actions = {
+        play = function(request)
+          server_data.playing = true
+          remote_context.debug "Music resumed."
+        end,
+        pause = function(request)
+          server_data.playing = false
+          remote_context.debug "Music paused."
+        end,
+        stop = function(request)
+          server_data.playing = false
+          os.queueEvent "fatmusic:stop"
+          server_data.song_queue.position = math.max(server_data.song_queue.position - 1, 0)
+          remote_context.debug "Music stopped."
+        end,
+        back = function(request)
+          os.queueEvent "fatmusic:stop"
+          server_data.song_queue.position = math.max(server_data.song_queue.position - 2, 0)
+          remote_context.debug "Music rewinded."
+        end,
+        skip = function(request)
+          os.queueEvent "fatmusic:stop"
+          remote_context.debug "Current song stopped, should skip to next automatically."
+        end,
+        skip_to = function(request)
+          if not request.position then
+            return { code = 400, error = "Expected argument 'position'" }
+          end
+          server_data.song_queue.position = math.min(#server_data.song_queue, request.position - 1)
+          os.queueEvent "fatmusic:stop"
+          remote_context.debug(("Skipped to queue position %d."):format(request.position))
+        end,
+        song = function(request)
+          if not request.song then
+            return { code = 400, error = "Expected argument 'song'" }
+          end
+          if #server_data.song_queue >= config.max_playlist then
+            return { code = 413, error = "Queue is full." }
+          end
+
+          remote_context.debug "Message is table!"
+          remote_context.debug(textutils.serialize(request.song, { compact = true }))
+          table.insert(server_data.song_queue, request.song)
+        end,
+        playlist = function(request)
+          return { code = 501, error = "Not implemented." }
+
+          -- Can respond 413 "request entity too large" if not enough space in the queue for the playlist.
+        end,
+        loop = function(request)
+          return { code = 501, error = "Not implemented." }
+        end,
+        randomize = function(request)
+          return { code = 501, error = "Not implemented." }
+        end,
+      }
+
       while true do
         local sender, message = rednet.receive("fatmusic")
         remote_context.debug "Received message."
         remote_context.debug("Server running:", config.server_running, "State:", server_data.broadcast_state)
         if config.server_running and server_data.broadcast_state == "online" then
           if type(message) == "table" then
-            if message.action == "play" then
-              server_data.playing = true
-              remote_context.debug "Music resumed."
-            elseif message.action == "pause" then
-              server_data.playing = false
-              remote_context.debug "Music paused."
-            elseif message.action == "stop" then
-              server_data.playing = false
-              os.queueEvent "fatmusic:stop"
-              server_data.song_queue.position = math.max(server_data.song_queue.position - 1, 0)
-              remote_context.debug "Music stopped."
-            elseif message.action == "back" then
-              os.queueEvent "fatmusic:stop"
-              server_data.song_queue.position = math.max(server_data.song_queue.position - 2, 0)
-              remote_context.debug "Music rewinded."
-            elseif message.action == "skip" then
-              os.queueEvent "fatmusic:stop"
-              remote_context.debug "Current song stopped, should skip to next automatically."
-            elseif message.action == "skip_to" then
-              server_data.song_queue.position = math.min(#server_data.song_queue, message.data - 1)
-              os.queueEvent "fatmusic:stop"
-              remote_context.debug(("Skipped to queue position %d."):format(message.data))
-            elseif message.action == "song" then
-              remote_context.debug "Message is table!"
-              remote_context.debug(textutils.serialize(message.song, {compact=true}))
-              table.insert(server_data.song_queue, message.song)
+            if actions[message.action] then
+              actions[message.action](message)
             end
           end
         end
@@ -1631,7 +1673,7 @@ local function run_server()
       -- Remote broadcast thread.
 
       local function clean_data()
-        local t = {song_queue = {position = server_data.song_queue.position}}
+        local t = { song_queue = { position = server_data.song_queue.position } }
 
         for i, song_data in ipairs(server_data.song_queue) do
           ---@diagnostic disable-next-line WHY THE FUCK DO YOU THINK IT'S AN INTEGER??????????
@@ -1653,7 +1695,7 @@ local function run_server()
 
       while true do
         sleep(config.data_ping_every)
-        
+
         if broadcast_state() then
           rednet.broadcast(
             {
