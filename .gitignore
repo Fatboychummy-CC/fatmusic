@@ -4,3 +4,4 @@ libs
 test_*
 extern-LLS
 .fatmusic_log_dump
+*.code-workspace
