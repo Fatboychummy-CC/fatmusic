@@ -34,11 +34,7 @@ local server_info = {
     list = {},
     current = 0
   },
-  channel_offsets = {
-    data_ping = 0,
-    radio = 0,
-    controls = 0
-  }
+  channel_offset = 0
 }
 
 local function replace_char_at(str, x, new)
@@ -158,6 +154,7 @@ local function setup_server()
   config.server_hidden = false
   config.server_running = false
   config.log_level = logging.LOG_LEVEL.DEBUG
+  config.channel_offset = 0
 
   setup_complete()
 end
@@ -192,6 +189,9 @@ if not config.type then
       return
     end
   end
+else
+  -- Read config into server data.
+  server_info.channel_offset = config.channel_offset or 0
 end
 
 local function client_settings()
@@ -1202,6 +1202,40 @@ local function server_settings(data)
     end
   }
 
+  local channel_offset_button = set.input_box {
+    x = 37,
+    y = 10,
+    w = 3,
+    text = ("%3d"):format(config.channel_offset),
+    bg_color = colors.lightGray,
+    highlight_bg_color = colors.white,
+    txt_color = colors.black,
+    highlight_txt_color = colors.black,
+    callback = function(self)
+      config.channel_offset = self.result
+      self.text = ("%3d"):format(config.channel_offset)
+    end,
+    verification_callback = function(str)
+      local v = tonumber(str)
+      if v then
+        if v >= 0 and v <= 999 then
+          return v
+        end
+
+        return nil, "Input must be between 0 and 999 (inclusive)."
+      else
+        return nil, "Input must be a number."
+      end
+    end,
+    info_x = 3,
+    info_y = 15,
+    info_w = 47,
+    info_h = 3,
+    info_bg_color = colors.gray,
+    info_txt_color = colors.white,
+    info_text = "Set the channel offset. This offsets the communications of each channel to prevent overlap.",
+  }
+
   local master_password_button = set.input_box {
     x = 21,
     y = 12,
@@ -1248,6 +1282,8 @@ local function server_settings(data)
     term.write("Broadcast rate:")
     term.setCursorPos(4, 10)
     term.write("Logging level:")
+    term.setCursorPos(21, 10)
+    term.write("Channel offset:")
     term.setCursorPos(4, 12)
     term.write("Master password:")
 
@@ -1278,10 +1314,15 @@ local function run_server()
     randomized = "false",
     looping = false,
     state = "startup", ---@type server_state
-    broadcast_state = config.server_hidden and "offline" or "ignore", ---@type server_broadcast_state
+    broadcast_state = "offline", ---@type server_broadcast_state
     playing = false
   }
 
+  if config.server_running then
+    server_data.broadcast_state = config.server_hidden and "offline" or "online"
+  else
+    server_data.broadcast_state = config.server_hidden and "offline" or "ignore"
+  end
 
   local comms = communications.namespace("fatmusic", CHANNELS.DISCOVERY, CHANNELS.CONTROLS)
   comms.set_modem(peripheral.find("modem", function(_, w) return w.isWireless() end))
