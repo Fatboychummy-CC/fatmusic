@@ -1,15 +1,13 @@
 --- The main program for fatmusic. This will setup as either a server or remote.
 --- This will also DOWNLOAD any required libraries.
 
--- TEMPORARY
-rednet.open("back")
-
 local file_helper = require "libs.file_helper"
 local display_utils = require "libs.display_utils"
 local button = require "libs.button"
 local ecc = require "libs.ecc"
 local logging = require "libs.logging"
 local aukit = require "libs.aukit"
+local communications = require "libs.communication"
 
 local main_context = logging.create_context "Main"
 local w, h = term.getSize()
@@ -17,6 +15,13 @@ local w, h = term.getSize()
 local FILES = {
   CONFIG = "config.lson",
   DUMP_FILE = fs.combine(file_helper.working_directory, ".fatmusic_log_dump")
+}
+
+local CHANNELS = {
+  DISCOVERY = 12000,
+  DATA_PING = 12001, -- + offset
+  RADIO     = 13001, -- + offset
+  CONTROLS  = 14001, -- + offset
 }
 
 local config = file_helper.unserialize(FILES.CONFIG, {})
@@ -29,6 +34,11 @@ local server_info = {
     list = {},
     current = 0
   },
+  channel_offsets = {
+    data_ping = 0,
+    radio = 0,
+    controls = 0
+  }
 }
 
 local function replace_char_at(str, x, new)
@@ -1265,10 +1275,16 @@ local function run_server()
     song_queue = {
       position = 0,
     },
+    randomized = "false",
+    looping = false,
     state = "startup", ---@type server_state
     broadcast_state = config.server_hidden and "offline" or "ignore", ---@type server_broadcast_state
     playing = false
   }
+
+
+  local comms = communications.namespace("fatmusic", CHANNELS.DISCOVERY, CHANNELS.CONTROLS)
+  comms.set_modem(peripheral.find("modem", function(_, w) return w.isWireless() end))
 
   --- Check if the server is in a state which allows it to broadcast data or respond to pings.
   ---@return boolean
@@ -1427,7 +1443,7 @@ local function run_server()
 
     -- playing
     term.setCursorPos(4, 12)
-    term.write(("Playing        : %20s"):format(server_data.playing and "true" or "false"))
+    term.write(("State          : %20s"):format(server_data.state))
 
     -- draw all the buttons.
     set.draw()
@@ -1649,22 +1665,40 @@ local function run_server()
           -- Can respond 413 "request entity too large" if not enough space in the queue for the playlist.
         end,
         loop = function(request)
-          return { code = 501, error = "Not implemented." }
+          if type(request.loop_status) ~= "boolean" then
+            return { code = 400, error = "Expected boolean argument 'loop_status'" }
+          end
+
+          server_data.looping = request.loop_status
         end,
         randomize = function(request)
-          return { code = 501, error = "Not implemented." }
+          if type(request.randomize_status) ~= "boolean" then
+            return { code = 400, error = "Expected boolean argument 'randomize_status'" }
+          end
+
+          server_data.randomized = request.randomize_status
         end,
+        clear_queue = function(request)
+          server_data.song_queue = { position = 0 }
+          server_data.playing = false
+          server_data.state = "stopped"
+          os.queueEvent "fatmusic:stop"
+        end
       }
 
       while true do
-        local sender, message = rednet.receive("fatmusic")
+        local packet = comms.receive()
         remote_context.debug "Received message."
         remote_context.debug("Server running:", config.server_running, "State:", server_data.broadcast_state)
         if config.server_running and server_data.broadcast_state == "online" then
-          if type(message) == "table" then
-            if actions[message.action] then
-              actions[message.action](message)
-            end
+          local payload = packet.payload
+          if actions[payload.action] then
+            remote_context.debug("Action", payload.action, "exists.")
+            local response = actions[payload.action](payload)
+            comms.send_packet(comms.new_response(packet,  response or { code = 200 }), CHANNELS.CONTROLS)
+          else
+            remote_context.debug("Action", payload.action, "does not exist!")
+            comms.send_packet(comms.new_response(packet, { code = 404, error = "Action does not exist." }), CHANNELS.CONTROLS)
           end
         end
       end
@@ -1697,13 +1731,12 @@ local function run_server()
         sleep(config.data_ping_every)
 
         if broadcast_state() then
-          rednet.broadcast(
+          comms.send_packet(comms.new_packet(
             {
               action = "data",
               data = clean_data()
-            },
-            "fatmusic"
-          )
+            }
+          ), CHANNELS.DATA_PING)
         end
       end
     end

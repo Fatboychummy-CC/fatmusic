@@ -7,6 +7,7 @@ local to_get = {
   "libs/display_utils.lua:display_utils.lua",
   "libs/file_helper.lua:file_helper.lua",
   "libs/logging.lua:logging.lua",
+  "libs/communication.lua:communication.lua",
   "paste:libs/ecc.lua:ZGJGBJdg",
   "extern:libs/aukit.lua:https://raw.githubusercontent.com/MCJack123/AUKit/master/aukit.lua",
   "extern:fatmusic.lua:https://raw.githubusercontent.com/Fatboychummy-CC/develop/main/fatmusic.lua",
