@@ -194,6 +194,13 @@ else
   server_info.channel_offset = config.channel_offset or 0
 end
 
+local comms = communications.namespace(
+  "fatmusic",
+  CHANNELS.DISCOVERY,
+  CHANNELS.CONTROLS + config.channel_offset
+)
+comms.set_modem(peripheral.find("modem", function(_, w) return w.isWireless() end))
+
 local function client_settings()
 
 end
@@ -428,6 +435,7 @@ local log_win = window.create(term.current(), 1, 1, w, h - 5, false)
 logging.set_window(log_win)
 logging.set_level(config.log_level)
 main_context.debug "Created custom log window."
+main_context.debug("Opened the following channels on modem", comms.get_modem_name(), ":", CHANNELS.DISCOVERY, CHANNELS.CONTROLS + config.channel_offset)
 --- Display the log window.
 local function display_logs(err)
   local set = button.set()
@@ -989,6 +997,8 @@ local function save_config()
   file_helper.serialize(FILES.CONFIG, config)
 end
 
+--- Run the server settings page.
+---@param data table
 local function server_settings(data)
   local set = button.set()
 
@@ -1214,6 +1224,10 @@ local function server_settings(data)
     callback = function(self)
       config.channel_offset = self.result
       self.text = ("%3d"):format(config.channel_offset)
+
+      comms.set_channels(CHANNELS.DISCOVERY, CHANNELS.CONTROLS + config.channel_offset)
+      main_context.debug("Opened the following channels on modem:", CHANNELS.DISCOVERY, CHANNELS.CONTROLS + config.channel_offset)
+      server_info.channel_offset = config.channel_offset
     end,
     verification_callback = function(str)
       local v = tonumber(str)
@@ -1324,9 +1338,6 @@ local function run_server()
     server_data.broadcast_state = config.server_hidden and "offline" or "ignore"
   end
 
-  local comms = communications.namespace("fatmusic", CHANNELS.DISCOVERY, CHANNELS.CONTROLS)
-  comms.set_modem(peripheral.find("modem", function(_, w) return w.isWireless() end))
-
   --- Check if the server is in a state which allows it to broadcast data or respond to pings.
   ---@return boolean
   local function broadcast_state()
@@ -1351,7 +1362,9 @@ local function run_server()
     right_bar = true,
     bar_color = colors.gray,
     highlight_bar_color = colors.lightGray,
-    callback = server_settings
+    callback = function()
+      server_settings(server_data)
+    end
   }
 
   local start_stop_button = set.new {
@@ -1736,10 +1749,10 @@ local function run_server()
           if actions[payload.action] then
             remote_context.debug("Action", payload.action, "exists.")
             local response = actions[payload.action](payload)
-            comms.send_packet(comms.new_response(packet,  response or { code = 200 }), CHANNELS.CONTROLS)
+            comms.send_packet(comms.new_response(packet,  response or { code = 200 }), CHANNELS.CONTROLS + config.channel_offset)
           else
             remote_context.debug("Action", payload.action, "does not exist!")
-            comms.send_packet(comms.new_response(packet, { code = 404, error = "Action does not exist." }), CHANNELS.CONTROLS)
+            comms.send_packet(comms.new_response(packet, { code = 404, error = "Action does not exist." }), CHANNELS.CONTROLS + config.channel_offset)
           end
         end
       end
@@ -1777,7 +1790,7 @@ local function run_server()
               action = "data",
               data = clean_data()
             }
-          ), CHANNELS.DATA_PING)
+          ), CHANNELS.DATA_PING + config.channel_offset)
         end
       end
     end
