@@ -39,7 +39,7 @@ local server_info = {
 
 local shadigest = ecc.sha256.digest
 local function hash_text(s)
-  for i = 1, 100 do
+  for i = 1, 1500 do
     s = shadigest(s)
   end
 
@@ -1216,7 +1216,7 @@ local function server_settings(data)
     txt_color = colors.black,
     highlight_txt_color = colors.black,
     callback = function(self)
-      config.log_level = (config.log_level + 1) % 4
+      config.log_level = (config.log_level + 1) % 5
       logging.set_level(config.log_level)
       self.text = ("%1d"):format(config.log_level)
     end
