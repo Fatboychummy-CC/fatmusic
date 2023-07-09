@@ -1751,16 +1751,6 @@ local function run_server()
           -- Fix buttons:
           config_button.holding = false
           logs_button.holding = false
-
-
-          ---@TODO This should probably kill whatever the UI thread is doing currently
-          -- (ie: if there is a text input open, it shouldn't keep it unlocked forever)
-          -- If the user closes that input though, it will lock immediately.
-          -- But, that allows any user to set whatever is opened.
-          -- Not the biggest issue, but probably should figure out a workaround.
-
-          ---@TODO This currently actually breaks if the user has an input box opened.
-          -- reason unclear.
         end
       end
     end,
