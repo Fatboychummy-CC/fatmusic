@@ -37,6 +37,15 @@ local server_info = {
   channel_offset = 0
 }
 
+local shadigest = ecc.sha256.digest
+local function hash_text(s)
+  for i = 1, 100 do
+    s = shadigest(s)
+  end
+
+  return s:toHex()
+end
+
 local function replace_char_at(str, x, new)
   if x <= 1 then
     return new .. str:sub(2)
@@ -1111,7 +1120,7 @@ local function server_settings(data)
     txt_color = colors.black,
     highlight_txt_color = colors.black,
     callback = function(self)
-      config.server_enc_key = self.result == "" and "" or ecc.sha256.digest(self.result):toHex()
+      config.server_enc_key = self.result == "" and "" or hash_text(self.result) --ecc.sha256.digest(self.result):toHex()
       self.text = config.server_enc_key == "" and "None" or ("\x07"):rep(10)
     end,
     verification_callback = verify_password,
@@ -1262,7 +1271,7 @@ local function server_settings(data)
     txt_color = colors.black,
     highlight_txt_color = colors.black,
     callback = function(self)
-      config.master_password = self.result == "" and "" or ecc.sha256.digest(self.result):toHex()
+      config.master_password = self.result == "" and "" or hash_text(self.result) --ecc.sha256.digest(self.result):toHex()
       self.text = config.master_password == "" and "None" or ("\x07"):rep(10)
     end,
     verification_callback = verify_password,
@@ -1591,7 +1600,7 @@ local function run_server()
     txt_color = colors.black,
     highlight_txt_color = colors.black,
     callback = function(self)
-      if ecc.sha256.digest(self.result):toHex() == config.master_password then
+      if hash_text(self.result) == config.master_password then--ecc.sha256.digest(self.result):toHex() == config.master_password then
         locked = false
       end
     end,
@@ -1656,6 +1665,16 @@ local function run_server()
     end
     term.setCursorPos(math.floor(w / 2 - #song_name / 2 + 1.5), 10)
     term.write(song_name)
+
+    term.setCursorPos(7, 11)
+    term.blit('\x9f' .. ('\x8f'):rep(37) .. '\x90', ('7'):rep(38) .. 'f', ('f'):rep(38) .. '7')
+    term.setCursorPos(7, 14)
+    term.blit('\x82' .. ('\x83'):rep(37) .. '\x81', ('f'):rep(39), ('7'):rep(39))
+
+    for i = 0, 1 do
+      term.setCursorPos(7, 12 + i)
+      term.blit('\x95' .. (' '):rep(37) .. '\x95', '7' .. ('f'):rep(38), 'f' .. ('7'):rep(38))
+    end
 
     playback_bar.draw()
 
