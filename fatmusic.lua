@@ -435,7 +435,8 @@ local log_win = window.create(term.current(), 1, 1, w, h - 5, false)
 logging.set_window(log_win)
 logging.set_level(config.log_level)
 main_context.debug "Created custom log window."
-main_context.debug("Opened the following channels on modem", comms.get_modem_name(), ":", CHANNELS.DISCOVERY, CHANNELS.CONTROLS + config.channel_offset)
+main_context.debug("Opened the following channels on modem", comms.get_modem_name(), ":", CHANNELS.DISCOVERY,
+  CHANNELS.CONTROLS + config.channel_offset)
 --- Display the log window.
 local function display_logs(err)
   local set = button.set()
@@ -1226,7 +1227,8 @@ local function server_settings(data)
       self.text = ("%3d"):format(config.channel_offset)
 
       comms.set_channels(CHANNELS.DISCOVERY, CHANNELS.CONTROLS + config.channel_offset)
-      main_context.debug("Opened the following channels on modem:", CHANNELS.DISCOVERY, CHANNELS.CONTROLS + config.channel_offset)
+      main_context.debug("Opened the following channels on modem:", CHANNELS.DISCOVERY,
+        CHANNELS.CONTROLS + config.channel_offset)
       server_info.channel_offset = config.channel_offset
     end,
     verification_callback = function(str)
@@ -1635,7 +1637,6 @@ local function run_server()
 
     local current_song = server_data.song_queue[server_data.song_queue.position] --[[@as song_info]]
     if current_song and server_data.playing then
-      draw_context.debug(textutils.serialize(current_song))
       playback_bar.percent = (current_song.current_position or 0) / (current_song.length or 1)
       a = fmt_seconds(current_song.current_position or 0)
       b = fmt_seconds(current_song.length or 1)
@@ -1708,7 +1709,8 @@ local function run_server()
   end
 
   local function is_user_input(event)
-    return event == "char" or event == "key" or event == "key_up" or event == "mouse_click" or event == "mouse_up" or event == "mouse_drag" or event == "mouse_scroll" or event == "paste"
+    return event == "char" or event == "key" or event == "key_up" or event == "mouse_click" or event == "mouse_up" or
+    event == "mouse_drag" or event == "mouse_scroll" or event == "paste"
   end
 
   local lock_timeout ---@type integer?
@@ -1745,14 +1747,13 @@ local function run_server()
     end,
     function()
       -- UI thread
+      local current_term = term.current() -- capture the current terminal -- if the screen locks while an editor is opened, it will lose the terminal.
 
       if locked then
         draw_lock_screen()
       else
         draw_server()
       end
-      local timer = os.startTimer(1) -- Why do I have this?
-      -- if any input box is open for more than 1 second this will stop working?
 
       local locked_last_tick = false
       while true do
@@ -1764,16 +1765,13 @@ local function run_server()
 
         if locked then
           lock_set.event(table.unpack(event, 1, event.n))
-          if event[1] == "timer" and event[2] == timer then
-            timer = os.startTimer(1)
+
+          if locked then
+            draw_lock_screen()
           else
-            if locked then
-              draw_lock_screen()
-            else
-              draw_server()
-              lock_timeout = os.startTimer(60)
-              main_context.info("User unlocked the server after entering the correct password.")
-            end
+            draw_server()
+            lock_timeout = os.startTimer(60)
+            main_context.info("User unlocked the server after entering the correct password.")
           end
         else
           parallel.waitForAny(
@@ -1783,14 +1781,13 @@ local function run_server()
             function()
               os.pullEvent("fatmusic:lock_console")
               locked_last_tick = true
+              term.redirect(current_term) -- ensure we return to the correct terminal.
+              term.setCursorBlink(false)
+              main_context.debug("Locked console from parallel")
             end
           )
 
-          if event[1] == "timer" and event[2] == timer then
-            timer = os.startTimer(1)
-          else
-            draw_server()
-          end
+          draw_server()
         end
       end
     end,
@@ -1904,10 +1901,12 @@ local function run_server()
           if actions[payload.action] then
             remote_context.debug("Action", payload.action, "exists.")
             local response = actions[payload.action](payload)
-            comms.send_packet(comms.new_response(packet,  response or { code = 200 }), CHANNELS.CONTROLS + config.channel_offset)
+            comms.send_packet(comms.new_response(packet, response or { code = 200 }),
+              CHANNELS.CONTROLS + config.channel_offset)
           else
             remote_context.debug("Action", payload.action, "does not exist!")
-            comms.send_packet(comms.new_response(packet, { code = 404, error = "Action does not exist." }), CHANNELS.CONTROLS + config.channel_offset)
+            comms.send_packet(comms.new_response(packet, { code = 404, error = "Action does not exist." }),
+              CHANNELS.CONTROLS + config.channel_offset)
           end
         end
       end
@@ -1936,7 +1935,7 @@ local function run_server()
         return t
       end
 
-      
+
 
       while true do
         sleep(config.data_ping_every)
