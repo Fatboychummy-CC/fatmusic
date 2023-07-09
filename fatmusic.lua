@@ -541,6 +541,10 @@ local function display_logs(err)
   end
 end
 
+local function save_config()
+  file_helper.serialize(FILES.CONFIG, config)
+end
+
 --- Run the client system.
 local function run_client()
   local set = button.set()
@@ -993,10 +997,6 @@ local function run_client()
   end
 end
 
-local function save_config()
-  file_helper.serialize(FILES.CONFIG, config)
-end
-
 --- Run the server settings page.
 ---@param data table
 local function server_settings(data)
@@ -1110,7 +1110,7 @@ local function server_settings(data)
     txt_color = colors.black,
     highlight_txt_color = colors.black,
     callback = function(self)
-      config.server_enc_key = self.result
+      config.server_enc_key = self.result == "" and "" or ecc.sha256.digest(self.result):toHex()
       self.text = config.server_enc_key == "" and "None" or ("\x07"):rep(10)
     end,
     verification_callback = verify_password,
@@ -1260,7 +1260,7 @@ local function server_settings(data)
     txt_color = colors.black,
     highlight_txt_color = colors.black,
     callback = function(self)
-      config.master_password = self.result
+      config.master_password = self.result == "" and "" or ecc.sha256.digest(self.result):toHex()
       self.text = config.master_password == "" and "None" or ("\x07"):rep(10)
     end,
     verification_callback = verify_password,
@@ -1320,6 +1320,7 @@ end
 
 local function run_server()
   local set = button.set()
+  local locked = config.master_password ~= ""
 
   local server_data = {
     song_queue = {
@@ -1575,6 +1576,89 @@ local function run_server()
     return false, ("Unsupported file type: %s"):format(song.file_type)
   end
 
+  local lock_set = button.set()
+
+  local lock_password = lock_set.input_box {
+    x = 15,
+    y = 7,
+    w = 23,
+    text = "",
+    bg_color = colors.lightGray,
+    highlight_bg_color = colors.white,
+    txt_color = colors.black,
+    highlight_txt_color = colors.black,
+    callback = function(self)
+      if ecc.sha256.digest(self.result):toHex() == config.master_password then
+        locked = false
+      end
+    end,
+    verification_callback = function(str)
+      return str
+    end,
+    info_x = 8,
+    info_y = 12,
+    info_w = 37,
+    info_h = 2,
+    info_bg_color = colors.gray,
+    info_txt_color = colors.white,
+    info_text = "Input the master password to access server console.",
+    default_text = "",
+    password_input_field = true
+  }
+
+  local playback_bar = display_utils.high_fidelity_percent_bar {
+    x = 8,
+    y = 12,
+    w = 37,
+    h = 2,
+    background = colors.lightGray,
+    filled = colors.blue,
+    current = colors.cyan,
+  } --[[@as display_utils-hfpb]]
+
+  local function draw_lock_screen()
+    term.setTextColor(colors.white)
+    term.setBackgroundColor(colors.black)
+    term.clear()
+    term.setBackgroundColor(colors.gray)
+
+    display_utils.fast_box(6, 4, 41, 13, colors.gray)
+
+    term.setCursorPos(15, 5)
+    term.write("Locked - Enter password")
+
+    local function fmt_seconds(s)
+      return ("%02d:%02d"):format(math.floor(s / 60), s % 60)
+    end
+    local a, b = "--:--", "--:--"
+
+    local current_song = server_data.song_queue[server_data.song_queue.position] --[[@as song_info]]
+    if current_song and server_data.playing then
+      draw_context.debug(textutils.serialize(current_song))
+      playback_bar.percent = (current_song.current_position or 0) / (current_song.length or 1)
+      a = fmt_seconds(current_song.current_position or 0)
+      b = fmt_seconds(current_song.length or 1)
+    else
+      playback_bar.percent = 0
+    end
+
+    term.setCursorPos(8, 15)
+    term.write(a)
+
+    term.setCursorPos(40, 15)
+    term.write(b)
+
+    local song_name = "No song currently playing"
+    if current_song then
+      song_name = current_song.name
+    end
+    term.setCursorPos(math.floor(w / 2 - #song_name / 2 + 1.5), 10)
+    term.write(song_name)
+
+    playback_bar.draw()
+
+    lock_set.draw()
+  end
 
   local blank = { {} }
   for i = 1, 48000 do blank[1][i] = 0 end
@@ -1626,16 +1710,34 @@ local function run_server()
     function()
       -- UI thread
 
-      draw_server()
-      local timer = os.startTimer(1)
+      if locked then
+        draw_lock_screen()
+      else
+        draw_server()
+      end
+      local timer = os.startTimer(1) -- Why do I have this?
       while true do
         local event = table.pack(os.pullEvent())
-        set.event(table.unpack(event, 1, event.n))
 
-        if event[1] == "timer" and event[2] == timer then
-          timer = os.startTimer(1)
+        if locked then
+          lock_set.event(table.unpack(event, 1, event.n))
+          if event[1] == "timer" and event[2] == timer then
+            timer = os.startTimer(1)
+          else
+            if locked then
+              draw_lock_screen()
+            else
+              draw_server()
+            end
+          end
         else
-          draw_server()
+          set.event(table.unpack(event, 1, event.n))
+
+          if event[1] == "timer" and event[2] == timer then
+            timer = os.startTimer(1)
+          else
+            draw_server()
+          end
         end
       end
     end,
@@ -1780,6 +1882,8 @@ local function run_server()
         t.state = server_data.state
         return t
       end
+
+      
 
       while true do
         sleep(config.data_ping_every)
