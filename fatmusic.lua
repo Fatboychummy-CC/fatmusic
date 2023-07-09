@@ -1009,7 +1009,8 @@ end
 
 --- Run the server settings page.
 ---@param data table
-local function server_settings(data)
+---@param on_change_callback fun() A callback that is called whenever something changes.
+local function server_settings(data, on_change_callback)
   local set = button.set()
 
   local go_back = false
@@ -1319,8 +1320,14 @@ local function server_settings(data)
     redraw()
     local event = table.pack(os.pullEvent())
 
+    local old_pw, old_ec = config.master_password, config.server_enc_key
+
     if set.event(table.unpack(event, 1, event.n)) then
       save_config()
+    end
+
+    if old_pw ~= config.master_password or old_ec ~= config.server_enc_key then
+      on_change_callback()
     end
 
     if go_back then
@@ -1333,6 +1340,9 @@ local function run_server()
   local set = button.set()
   local should_lock = config.master_password ~= ""
   local locked = should_lock
+  local was_locking = should_lock
+  local locked_last_tick = false
+  local lock_timeout ---@type integer?
 
   local server_data = {
     song_queue = {
@@ -1345,6 +1355,8 @@ local function run_server()
     playing = false
   }
 
+  local current_term = term.current() -- capture the current terminal -- if the screen locks while an editor is opened, it will lose the terminal.
+
   if config.server_running then
     server_data.broadcast_state = config.server_hidden and "offline" or "online"
   else
@@ -1356,6 +1368,20 @@ local function run_server()
   local function broadcast_state()
     return server_data.broadcast_state == "online"
         or server_data.broadcast_state == "ignore"
+  end
+
+  local function on_pw_change()
+    -- Catch password or encryption key changes
+    if config.master_password == "" then
+      should_lock = false
+      locked = false
+    else
+      should_lock = true
+      if not was_locking then
+        locked = true
+        lock_timeout = os.startTimer(60)
+      end
+    end
   end
 
   local config_button = set.new {
@@ -1376,7 +1402,7 @@ local function run_server()
     bar_color = colors.gray,
     highlight_bar_color = colors.lightGray,
     callback = function()
-      server_settings(server_data)
+      server_settings(server_data, on_pw_change)
     end
   }
 
@@ -1452,6 +1478,12 @@ local function run_server()
   }
 
   local draw_context = logging.create_context "DRAW"
+  local function draw_lock_icon()
+    if should_lock then
+      current_term.setCursorPos(w, 1)
+      current_term.blit('\xa4', 'e', '0')
+    end
+  end
   local function draw_server()
     term.setBackgroundColor(colors.black)
     term.clear()
@@ -1514,6 +1546,8 @@ local function run_server()
 
     -- draw all the buttons.
     set.draw()
+
+    draw_lock_icon()
   end
 
   local song_context = logging.create_context "MUSIC_CONTROL"
@@ -1732,18 +1766,22 @@ local function run_server()
     event == "mouse_drag" or event == "mouse_scroll" or event == "paste"
   end
 
-  local lock_timeout ---@type integer?
   parallel.waitForAny(
     function()
       -- Lockout thread
+
       while true do
-        local event, timer = os.pullEvent()
+        if not locked then
+          draw_lock_icon() -- drawing here forces it to draw even if we have opened a text input field.
+        end
+        -- what a bodge.
+        local event, timer, x, y = os.pullEvent()
 
         if is_user_input(event) and not locked and should_lock then
           lock_timeout = os.startTimer(60)
         end
 
-        if event == "timer" and timer == lock_timeout then
+        if event == "timer" and timer == lock_timeout and should_lock then
           locked = true
           os.queueEvent("fatmusic:lock_console")
           main_context.info("Automatically locked server console after 60 second timeout.")
@@ -1751,12 +1789,13 @@ local function run_server()
           -- Fix buttons:
           config_button.holding = false
           logs_button.holding = false
+        elseif should_lock and event == "mouse_click" and timer == 1 and x == w and y == 1 then
+          locked = true
         end
       end
     end,
     function()
       -- UI thread
-      local current_term = term.current() -- capture the current terminal -- if the screen locks while an editor is opened, it will lose the terminal.
 
       if locked then
         draw_lock_screen()
@@ -1764,7 +1803,7 @@ local function run_server()
         draw_server()
       end
 
-      local locked_last_tick = false
+      locked_last_tick = false
       while true do
         if locked_last_tick then
           draw_lock_screen()
@@ -1779,10 +1818,13 @@ local function run_server()
             draw_lock_screen()
           else
             draw_server()
+            
             lock_timeout = os.startTimer(60)
             main_context.info("User unlocked the server after entering the correct password.")
           end
         else
+          was_locking = should_lock
+
           parallel.waitForAny(
             function()
               set.event(table.unpack(event, 1, event.n))
