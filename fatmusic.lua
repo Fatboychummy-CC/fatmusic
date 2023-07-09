@@ -1320,7 +1320,8 @@ end
 
 local function run_server()
   local set = button.set()
-  local locked = config.master_password ~= ""
+  local should_lock = config.master_password ~= ""
+  local locked = should_lock
 
   local server_data = {
     song_queue = {
@@ -1706,7 +1707,42 @@ local function run_server()
     audio_context.error("Failed to download", song_data.name, ":", err)
   end
 
+  local function is_user_input(event)
+    return event == "char" or event == "key" or event == "key_up" or event == "mouse_click" or event == "mouse_up" or event == "mouse_drag" or event == "mouse_scroll" or event == "paste"
+  end
+
+  local lock_timeout ---@type integer?
   parallel.waitForAny(
+    function()
+      -- Lockout thread
+      while true do
+        local event, timer = os.pullEvent()
+
+        if is_user_input(event) and not locked and should_lock then
+          lock_timeout = os.startTimer(60)
+        end
+
+        if event == "timer" and timer == lock_timeout then
+          locked = true
+          os.queueEvent("fatmusic:lock_console")
+          main_context.info("Automatically locked server console after 60 second timeout.")
+
+          -- Fix buttons:
+          config_button.holding = false
+          logs_button.holding = false
+
+
+          ---@TODO This should probably kill whatever the UI thread is doing currently
+          -- (ie: if there is a text input open, it shouldn't keep it unlocked forever)
+          -- If the user closes that input though, it will lock immediately.
+          -- But, that allows any user to set whatever is opened.
+          -- Not the biggest issue, but probably should figure out a workaround.
+
+          ---@TODO This currently actually breaks if the user has an input box opened.
+          -- reason unclear.
+        end
+      end
+    end,
     function()
       -- UI thread
 
@@ -1716,7 +1752,14 @@ local function run_server()
         draw_server()
       end
       local timer = os.startTimer(1) -- Why do I have this?
+      -- if any input box is open for more than 1 second this will stop working?
+
+      local locked_last_tick = false
       while true do
+        if locked_last_tick then
+          draw_lock_screen()
+          locked_last_tick = false
+        end
         local event = table.pack(os.pullEvent())
 
         if locked then
@@ -1728,10 +1771,20 @@ local function run_server()
               draw_lock_screen()
             else
               draw_server()
+              lock_timeout = os.startTimer(60)
+              main_context.info("User unlocked the server after entering the correct password.")
             end
           end
         else
-          set.event(table.unpack(event, 1, event.n))
+          parallel.waitForAny(
+            function()
+              set.event(table.unpack(event, 1, event.n))
+            end,
+            function()
+              os.pullEvent("fatmusic:lock_console")
+              locked_last_tick = true
+            end
+          )
 
           if event[1] == "timer" and event[2] == timer then
             timer = os.startTimer(1)
