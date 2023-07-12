@@ -1348,11 +1348,12 @@ local function run_server()
     song_queue = {
       position = 0,
     },
-    randomized = "false",
-    looping = false,
+    randomized = false, ---@type boolean
+    randomized_queue = {position = 0},
+    looping = false, ---@type boolean
     state = "startup", ---@type server_state
     broadcast_state = "offline", ---@type server_broadcast_state
-    playing = false
+    playing = false ---@type boolean
   }
 
   local current_term = term.current() -- capture the current terminal -- if the screen locks while an editor is opened, it will lose the terminal.
@@ -1552,16 +1553,75 @@ local function run_server()
 
   local song_context = logging.create_context "MUSIC_CONTROL"
   local function get_next_song()
-    server_data.song_queue.position = server_data.song_queue.position + 1
-    song_context.debug "Increment song queue position"
-    song_context.debug(server_data.song_queue.position - 1, "->", server_data.song_queue.position)
-    local song = server_data.song_queue[server_data.song_queue.position]
-    if song then
-      song_context.debug "Got song at position!"
-      return song
+    if server_data.randomized then
+      -- Create a random queue if one does not exist.
+      -- OR if we've reached the end of the current random queue.
+      ---@todo weighted generation: at midway point, cut half the queue and weight those songs high.
+      --       The second half of the current queue will be weighted low, lower the closest to current song.
+      --       This should allow the user to go back if the queue reaches the end and wraps around.
+      --       As well, this should give a pretty even randomization so it doesn't seem like the same songs are playing over and over again.
+      local len = #server_data.randomized_queue
+      if len == 0 or (server_data.randomized_queue.position >= len and server_data.looping) then
+        server_data.randomized_queue = {}
+        server_data.randomized_queue.position = 0
+        -- fun fact: the following section of code is technically O(inf) :)
+        song_context.info("No randomized list exists, creating one.")
+        local selected = {}
+        local slen = #server_data.song_queue
+        for i = 1, slen do
+          local selection
+          repeat
+            selection = math.random(1, slen)
+          until not selected[selection]
+          selected[selection] = true
+
+          server_data.randomized_queue[selection] = server_data.song_queue[i]
+        end
+      end
+
+      -- Get the next song in the list, determine its position in the song queue.
+      server_data.randomized_queue.position = server_data.randomized_queue.position + 1
+      local song = server_data.randomized_queue[server_data.randomized_queue.position]
+      for i = 1, #server_data.song_queue do
+        if song == server_data.song_queue[i] then
+          server_data.song_queue.position = i
+          return song
+        end
+      end
+
+      if song then
+        -- Not found in the song queue.
+        return song
+      elseif not server_data.looping and server_data.randomized_queue.position >= len then
+        -- Song not found, at end of list and not looping.
+        server_data.song_queue.position = 0
+        server_data.playing = false
+      else
+        -- Song not found, at end of list and looping (shouldn't happen)
+        -- Can happen if queue is empty maybe? Will need to test.
+        ---@todo test the above.
+        error("Song not found, at end of randomized playlist and not looping. This shouldn't happen.")
+      end
     else
-      song_context.debug "No song at that queue position."
-      server_data.song_queue.position = server_data.song_queue.position - 1
+      server_data.song_queue.position = server_data.song_queue.position + 1
+      song_context.debug "Increment song queue position"
+      song_context.debug(server_data.song_queue.position - 1, "->", server_data.song_queue.position)
+      local song = server_data.song_queue[server_data.song_queue.position]
+
+      if song then
+        song_context.debug "Got song at position!"
+        return song
+      else
+        song_context.debug "No song at that queue position."
+        if server_data.looping then
+          -- we reached the end, return to zero
+          server_data.song_queue.position = 0
+          -- the next tick the server will grab the correct song.
+        else
+          server_data.song_queue.position = 0
+          server_data.playing = false
+        end
+      end
     end
   end
 
@@ -1818,7 +1878,7 @@ local function run_server()
             draw_lock_screen()
           else
             draw_server()
-            
+
             lock_timeout = os.startTimer(60)
             main_context.info("User unlocked the server after entering the correct password.")
           end
@@ -1965,6 +2025,8 @@ local function run_server()
     function()
       -- Remote broadcast thread.
 
+      --- Clean the server data table of any unneeded (or private) information.
+      ---@return table
       local function clean_data()
         local t = { song_queue = { position = server_data.song_queue.position } }
 
@@ -1977,16 +2039,16 @@ local function run_server()
             current_position = song_data.current_position,
             length = song_data.length,
             genre = song_data.genre,
-            name = song_data.name
+            name = song_data.name,
           }
         end
 
         t.playing = server_data.playing
         t.state = server_data.state
+        t.randomized = server_data.randomized
+        t.looping = server_data.looping
         return t
       end
-
-
 
       while true do
         sleep(config.data_ping_every)
